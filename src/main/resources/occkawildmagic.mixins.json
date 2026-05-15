@@ -3,7 +3,7 @@
 	"package": "wildmagic.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
-		"ExampleMixin"
+		"PlayerAdvancementsMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
