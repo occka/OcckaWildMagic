@@ -89,31 +89,46 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 
 		PlayerClassData data = ClientClassState.data();
 		if (!data.hasClass()) {
-			drawCentered(graphics, client, Component.literal("Нажми R, чтобы выбрать класс"), screenWidth(client) / 2, screenHeight(client) - 62, 0xFFE6C15A);
+			drawCentered(graphics, client, Component.literal("Нажми R, чтобы выбрать класс"), screenWidth(client) / 2, screenHeight(client) - 72, 0xFFE6C15A);
 			return;
 		}
 
-		int width = 182;
-		int x = (screenWidth(client) - width) / 2;
-		int y = screenHeight(client) - 40;
-		graphics.fill(x, y, x + width, y + 5, 0xAA11111A);
-		graphics.fill(x, y, x + Math.round(width * data.expProgress()), y + 5, 0xFF8A55FF);
-		drawCentered(graphics, client, Component.literal(data.selectedClass().displayName() + " " + data.level() + " ур.  " + data.exp() + "/" + data.expRequiredForNextLevel()), screenWidth(client) / 2, y - 10, 0xFFFFFFFF);
-		if (data.selectedClass().usesMana()) {
-			drawCentered(graphics, client, Component.literal("Мана " + data.mana() + "/" + data.maxMana()), screenWidth(client) / 2, y + 8, 0xFF55D8FF);
+		int classBarWidth = 182;
+		int classBarX = (screenWidth(client) - classBarWidth) / 2;
+		int classBarY = screenHeight(client) - 62;
+		graphics.fill(classBarX, classBarY, classBarX + classBarWidth, classBarY + 5, 0xAA11111A);
+		graphics.fill(classBarX, classBarY, classBarX + Math.round(classBarWidth * data.expProgress()), classBarY + 5, 0xFF8A55FF);
+		drawCentered(graphics, client, Component.literal(data.selectedClass().displayName() + " " + data.level() + " ур.  " + data.exp() + "/" + data.expRequiredForNextLevel()), screenWidth(client) / 2, classBarY - 10, 0xFFFFFFFF);
+
+		int abilityX = (screenWidth(client) / 2) + 96;
+		int abilityY = screenHeight(client) - 24;
+		for (int slot = 0; slot < PlayerClassData.ACTIVE_SLOT_COUNT; slot++) {
+			int x = abilityX + (slot * 24);
+			graphics.fill(x, abilityY, x + 22, abilityY + 22, 0xAA11111A);
+			graphics.fill(x + 1, abilityY + 1, x + 21, abilityY + 21, 0xAA25253A);
+			drawCentered(graphics, client, Component.literal(slotHudText(data, slot)), x + 11, abilityY + 7, 0xFFFFFFFF);
 		}
-		drawCentered(graphics, client, Component.literal("Z: " + slotLabel(data, 0) + "  X: " + slotLabel(data, 1) + "  C: " + slotLabel(data, 2)), screenWidth(client) / 2, y + 20, 0xFFE6E6E6);
+
+		if (data.selectedClass().usesMana()) {
+			int manaX = abilityX;
+			int manaY = abilityY - 10;
+			int manaWidth = 70;
+			float manaProgress = data.maxMana() <= 0 ? 0.0F : Math.clamp(data.mana() / (float) data.maxMana(), 0.0F, 1.0F);
+			graphics.fill(manaX, manaY, manaX + manaWidth, manaY + 5, 0xAA071225);
+			graphics.fill(manaX, manaY, manaX + Math.round(manaWidth * manaProgress), manaY + 5, 0xFF2AA7FF);
+			drawCentered(graphics, client, Component.literal(data.mana() + "/" + data.maxMana()), manaX + (manaWidth / 2), manaY - 9, 0xFF55D8FF);
+		}
 	}
 
-	private static String slotLabel(PlayerClassData data, int slot) {
+	private static String slotHudText(PlayerClassData data, int slot) {
 		String abilityId = data.activeAbility(slot);
 		if (abilityId.isBlank()) {
 			return "-";
 		}
 
 		return wildmagic.classdata.ClassProgression.abilityFor(data.selectedClass(), abilityId)
-				.map(wildmagic.classdata.AbilityDefinition::title)
-				.orElse(abilityId);
+				.map(ability -> ability.manaCost() > 0 ? ability.manaCost() + "M" : ability.cooldownSeconds() + "s")
+				.orElse("?");
 	}
 
 	private static int screenWidth(Minecraft client) {

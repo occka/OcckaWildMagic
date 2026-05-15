@@ -78,7 +78,8 @@ public class ClassMenuScreen extends Screen {
 			AbilityDefinition ability = abilities.get(i);
 			boolean unlocked = ability.isUnlocked(data);
 			String marker = ability.passive() ? "Пассивка: " : unlocked ? "Активная: " : "Закрыта: ";
-			Component label = Component.literal(marker + ability.title() + " (ур. " + ability.unlockLevel() + ")");
+			String resource = ability.passive() ? "всегда" : ability.manaCost() > 0 ? ability.manaCost() + " маны" : ability.cooldownSeconds() + "с кд";
+			Component label = Component.literal(marker + ability.title() + " (ур. " + ability.unlockLevel() + ", " + resource + ")");
 			addRenderableWidget(Button.builder(label, button -> {
 				if (ability.canBeEquipped() && ability.isUnlocked(ClientClassState.data())) {
 					equipAbility(ability.id());
@@ -124,9 +125,14 @@ public class ClassMenuScreen extends Screen {
 		int barY = 48;
 		graphics.fill(barX, barY, barX + 200, barY + 8, 0xFF232333);
 		graphics.fill(barX, barY, barX + Math.round(200 * data.expProgress()), barY + 8, 0xFF7D4CDB);
-		drawCentered(graphics, Component.literal("Опыт класса: " + data.exp() + " / " + data.expRequiredForNextLevel()), width / 2, barY + 10, 0xFFFFFFFF);
+		if (data.level() >= ClassProgression.MAX_LEVEL) {
+			drawCentered(graphics, Component.literal("Максимальный уровень класса"), width / 2, barY + 10, 0xFFFFFFFF);
+		} else {
+			drawCentered(graphics, Component.literal("До уровня " + (data.level() + 1) + ": " + data.exp() + " / " + data.expRequiredForNextLevel() + " class exp"), width / 2, barY + 10, 0xFFFFFFFF);
+		}
+		graphics.text(font, Component.literal("1 достижение = 1 class exp. Заданий для апа уровня больше нет."), width / 2 - 150, barY + 24, 0xFFC8C8C8, true);
 		if (clazz.usesMana()) {
-			graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana()).withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
+			graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
 		}
 		drawCentered(graphics, Component.literal("Выбери слот сверху, затем активную способность ниже. Пассивки работают всегда."), width / 2, height - 24, 0xFFC8C8C8);
 	}

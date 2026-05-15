@@ -32,6 +32,14 @@ public record PlayerClassData(WildMagicClass selectedClass, int level, int exp, 
 		return new PlayerClassData(selectedClass, clamped, exp, newMana, newMaxMana, slotOneAbility, slotTwoAbility, slotThreeAbility);
 	}
 
+	public PlayerClassData withMana(int newMana) {
+		return new PlayerClassData(selectedClass, level, exp, Math.clamp(newMana, 0, maxMana), maxMana, slotOneAbility, slotTwoAbility, slotThreeAbility);
+	}
+
+	public PlayerClassData consumeMana(int manaCost) {
+		return withMana(mana - Math.max(0, manaCost));
+	}
+
 	public PlayerClassData withActiveAbility(int slot, String abilityId) {
 		String normalizedAbilityId = abilityId == null ? "" : abilityId;
 		String slotOne = removeDuplicate(slot, 0, normalizedAbilityId, slotOneAbility);
@@ -93,12 +101,15 @@ public record PlayerClassData(WildMagicClass selectedClass, int level, int exp, 
 		}
 
 		try {
+			int level = ClassProgression.clampLevel(Integer.parseInt(parts[1]));
+			int maxMana = clazz.get().usesMana() ? ClassProgression.maxManaForLevel(level) : 0;
+			int mana = Math.clamp(Integer.parseInt(parts[3]), 0, maxMana);
 			return new PlayerClassData(
 					clazz.get(),
-					Integer.parseInt(parts[1]),
+					level,
 					Integer.parseInt(parts[2]),
-					Integer.parseInt(parts[3]),
-					Integer.parseInt(parts[4]),
+					mana,
+					maxMana,
 					parts.length > 5 ? parts[5] : "",
 					parts.length > 6 ? parts[6] : "",
 					parts.length > 7 ? parts[7] : ""

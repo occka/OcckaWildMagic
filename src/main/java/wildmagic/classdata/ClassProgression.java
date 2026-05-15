@@ -28,7 +28,11 @@ public final class ClassProgression {
 	}
 
 	public static int maxManaForLevel(int level) {
-		return 40 + (Math.max(MIN_LEVEL, level) * 10);
+		return 100 + ((Math.max(MIN_LEVEL, level) - 1) / 3 * 20);
+	}
+
+	public static int manaRegenPerSecond(WildMagicClass clazz) {
+		return clazz != null && clazz.usesMana() ? 5 : 0;
 	}
 
 	public static List<AbilityDefinition> abilitiesFor(WildMagicClass clazz) {
@@ -46,6 +50,15 @@ public final class ClassProgression {
 	}
 
 	private static List<AbilityDefinition> createStarterAbilities(WildMagicClass clazz) {
+		if (clazz == WildMagicClass.BARD) {
+			return List.of(
+					new AbilityDefinition("bard_inspiration", "Вдохновение", "Ноты вокруг барда: регенерация II на 5с и поглощение VI на 30с себе и союзникам в радиусе 5 блоков.", 1, 0, 30),
+					new AbilityDefinition("bard_sound_wave", "Звуковая волна", "Волна 3x3 летит на 6 блоков, наносит 4-10 урона, отталкивает и подбрасывает задетых целей.", 2, 8, 35),
+					new AbilityDefinition("bard_mastery", "Великая баллада", "Поздняя активная способность барда для будущей настройки.", 8, 0, 45),
+					new AbilityDefinition("bard_fragile_performer", "Хрупкий исполнитель", "Пассивка: максимум здоровья барда меньше на 2 сердца.", 1, 0, 0, true)
+			);
+		}
+
 		String resource = clazz.usesMana() ? "мана" : "кд";
 		return List.of(
 				new AbilityDefinition(clazz.id() + "_starter", "Стартовая способность", "Базовая активная способность класса. Позже здесь будет точная механика и баланс.", 1, clazz.usesMana() ? 0 : 12, clazz.usesMana() ? 10 : 0),
