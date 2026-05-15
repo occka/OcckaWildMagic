@@ -180,7 +180,7 @@ public final class WildMagicServerState {
 	}
 
 	private static boolean useBardInspiration(ServerPlayer player) {
-		ServerLevel level = player.serverLevel();
+		ServerLevel level = player.level();
 		AABB area = player.getBoundingBox().inflate(5.0D);
 		for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, area)) {
 			entity.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1), player);
@@ -192,7 +192,7 @@ public final class WildMagicServerState {
 	}
 
 	private static boolean useBardSoundWave(ServerPlayer player) {
-		ServerLevel level = player.serverLevel();
+		ServerLevel level = player.level();
 		Vec3 look = player.getLookAngle().normalize();
 		Set<LivingEntity> hitEntities = new HashSet<>();
 		for (int step = 1; step <= 6; step++) {
