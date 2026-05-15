@@ -2,10 +2,10 @@
 	"schemaVersion": 1,
 	"id": "occkawildmagic",
 	"version": "${version}",
-	"name": "OcckaWildMagic",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "Occka Wild Magic",
+	"description": "Каркас классов, способностей, прокачки и синхронизации игрок-сервер для RPG-мода.",
 	"authors": [
-		"Me!"
+		"Occka"
 	],
 	"contact": {
 		"homepage": "https://fabricmc.net/",
@@ -23,11 +23,7 @@
 		]
 	},
 	"mixins": [
-		"occkawildmagic.mixins.json",
-		{
-			"config": "occkawildmagic.client.mixins.json",
-			"environment": "client"
-		}
+		"occkawildmagic.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.19.2",
