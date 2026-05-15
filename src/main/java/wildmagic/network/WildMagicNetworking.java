@@ -6,7 +6,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import wildmagic.OcckaWildMagic;
 import wildmagic.classdata.PlayerClassData;
@@ -21,7 +21,7 @@ public final class WildMagicNetworking {
 	}
 
 	public static void registerServerReceivers() {
-		PayloadTypeRegistry.playC2S().register(SelectClassC2SPayload.TYPE, SelectClassC2SPayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(SelectClassC2SPayload.TYPE, SelectClassC2SPayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(SelectClassC2SPayload.TYPE, (payload, context) -> context.server().execute(() -> {
 			ServerPlayer player = context.player();
 			Optional<WildMagicClass> selected = WildMagicClass.VALUES.stream()
@@ -32,15 +32,15 @@ public final class WildMagicNetworking {
 	}
 
 	public static void registerPayloadTypes() {
-		PayloadTypeRegistry.playS2C().register(SyncClassDataS2CPayload.TYPE, SyncClassDataS2CPayload.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(SyncClassDataS2CPayload.TYPE, SyncClassDataS2CPayload.CODEC);
 	}
 
 	public static void sendClassData(ServerPlayer player, PlayerClassData data) {
 		ServerPlayNetworking.send(player, new SyncClassDataS2CPayload(data.serialize()));
 	}
 
-	private static ResourceLocation id(String path) {
-		return ResourceLocation.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, path);
+	private static Identifier id(String path) {
+		return Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, path);
 	}
 
 	public record SyncClassDataS2CPayload(String serializedData) implements CustomPacketPayload {
