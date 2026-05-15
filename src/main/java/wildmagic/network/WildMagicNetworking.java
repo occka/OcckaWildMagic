@@ -22,6 +22,8 @@ public final class WildMagicNetworking {
 
 	public static void registerServerReceivers() {
 		PayloadTypeRegistry.serverboundPlay().register(SelectClassC2SPayload.TYPE, SelectClassC2SPayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(SetAbilitySlotC2SPayload.TYPE, SetAbilitySlotC2SPayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(UseAbilitySlotC2SPayload.TYPE, UseAbilitySlotC2SPayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(SelectClassC2SPayload.TYPE, (payload, context) -> context.server().execute(() -> {
 			ServerPlayer player = context.player();
 			Optional<WildMagicClass> selected = WildMagicClass.VALUES.stream()
@@ -29,6 +31,8 @@ public final class WildMagicNetworking {
 					.findFirst();
 			selected.ifPresent(clazz -> WildMagicServerState.selectClass(player, clazz));
 		}));
+		ServerPlayNetworking.registerGlobalReceiver(SetAbilitySlotC2SPayload.TYPE, (payload, context) -> context.server().execute(() -> WildMagicServerState.setActiveAbility(context.player(), payload.slot(), payload.abilityId())));
+		ServerPlayNetworking.registerGlobalReceiver(UseAbilitySlotC2SPayload.TYPE, (payload, context) -> context.server().execute(() -> WildMagicServerState.useActiveAbility(context.player(), payload.slot())));
 	}
 
 	public static void registerPayloadTypes() {
@@ -63,6 +67,36 @@ public final class WildMagicNetworking {
 				ByteBufCodecs.STRING_UTF8,
 				SelectClassC2SPayload::classId,
 				SelectClassC2SPayload::new
+		);
+
+		@Override
+		public Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	public record SetAbilitySlotC2SPayload(int slot, String abilityId) implements CustomPacketPayload {
+		public static final Type<SetAbilitySlotC2SPayload> TYPE = new Type<>(id("set_ability_slot"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, SetAbilitySlotC2SPayload> CODEC = StreamCodec.composite(
+				ByteBufCodecs.VAR_INT,
+				SetAbilitySlotC2SPayload::slot,
+				ByteBufCodecs.STRING_UTF8,
+				SetAbilitySlotC2SPayload::abilityId,
+				SetAbilitySlotC2SPayload::new
+		);
+
+		@Override
+		public Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	public record UseAbilitySlotC2SPayload(int slot) implements CustomPacketPayload {
+		public static final Type<UseAbilitySlotC2SPayload> TYPE = new Type<>(id("use_ability_slot"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, UseAbilitySlotC2SPayload> CODEC = StreamCodec.composite(
+				ByteBufCodecs.VAR_INT,
+				UseAbilitySlotC2SPayload::slot,
+				UseAbilitySlotC2SPayload::new
 		);
 
 		@Override

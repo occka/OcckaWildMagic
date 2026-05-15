@@ -15,4 +15,8 @@ public final class ClientClassState {
 	public static void update(PlayerClassData newData) {
 		data = newData;
 	}
+
+	public static void setActiveAbility(int slot, String abilityId) {
+		data = data.withActiveAbility(slot, abilityId);
+	}
 }

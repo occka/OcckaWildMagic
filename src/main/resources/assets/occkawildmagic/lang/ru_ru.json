@@ -1,4 +1,7 @@
 {
 	"key.category.occkawildmagic.wild_magic": "Occka Wild Magic",
-	"key.occkawildmagic.open_class_menu": "Открыть меню класса"
+	"key.occkawildmagic.open_class_menu": "Открыть меню класса",
+	"key.occkawildmagic.ability_slot_1": "Использовать слот способности 1",
+	"key.occkawildmagic.ability_slot_2": "Использовать слот способности 2",
+	"key.occkawildmagic.ability_slot_3": "Использовать слот способности 3"
 }

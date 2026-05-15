@@ -24,6 +24,9 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 			Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "wild_magic")
 	);
 	private static KeyMapping openClassMenu;
+	private static KeyMapping abilitySlotOne;
+	private static KeyMapping abilitySlotTwo;
+	private static KeyMapping abilitySlotThree;
 
 	@Override
 	public void onInitializeClient() {
@@ -48,11 +51,34 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 				CATEGORY
 		));
 
+		abilitySlotOne = registerAbilityKey("key.occkawildmagic.ability_slot_1", GLFW.GLFW_KEY_Z);
+		abilitySlotTwo = registerAbilityKey("key.occkawildmagic.ability_slot_2", GLFW.GLFW_KEY_X);
+		abilitySlotThree = registerAbilityKey("key.occkawildmagic.ability_slot_3", GLFW.GLFW_KEY_C);
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (openClassMenu.consumeClick()) {
 				client.setScreen(new ClassMenuScreen());
 			}
+
+			consumeAbilityKey(abilitySlotOne, 0);
+			consumeAbilityKey(abilitySlotTwo, 1);
+			consumeAbilityKey(abilitySlotThree, 2);
 		});
+	}
+
+	private static KeyMapping registerAbilityKey(String translationKey, int defaultKey) {
+		return KeyMappingHelper.registerKeyMapping(new KeyMapping(
+				translationKey,
+				InputConstants.Type.KEYSYM,
+				defaultKey,
+				CATEGORY
+		));
+	}
+
+	private static void consumeAbilityKey(KeyMapping keyMapping, int slot) {
+		while (keyMapping.consumeClick()) {
+			ClientPlayNetworking.send(new WildMagicNetworking.UseAbilitySlotC2SPayload(slot));
+		}
 	}
 
 	private static void renderClassExpHud(GuiGraphicsExtractor graphics) {
@@ -76,6 +102,18 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 		if (data.selectedClass().usesMana()) {
 			drawCentered(graphics, client, Component.literal("Мана " + data.mana() + "/" + data.maxMana()), screenWidth(client) / 2, y + 8, 0xFF55D8FF);
 		}
+		drawCentered(graphics, client, Component.literal("Z: " + slotLabel(data, 0) + "  X: " + slotLabel(data, 1) + "  C: " + slotLabel(data, 2)), screenWidth(client) / 2, y + 20, 0xFFE6E6E6);
+	}
+
+	private static String slotLabel(PlayerClassData data, int slot) {
+		String abilityId = data.activeAbility(slot);
+		if (abilityId.isBlank()) {
+			return "-";
+		}
+
+		return wildmagic.classdata.ClassProgression.abilityFor(data.selectedClass(), abilityId)
+				.map(wildmagic.classdata.AbilityDefinition::title)
+				.orElse(abilityId);
 	}
 
 	private static int screenWidth(Minecraft client) {

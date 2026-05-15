@@ -2,10 +2,13 @@ package wildmagic.server;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 import wildmagic.OcckaWildMagic;
+import wildmagic.classdata.AbilityDefinition;
+import wildmagic.classdata.ClassProgression;
 import wildmagic.classdata.PlayerClassData;
 import wildmagic.classdata.WildMagicClass;
 import wildmagic.network.WildMagicNetworking;
@@ -43,7 +46,61 @@ public final class WildMagicServerState {
 			return;
 		}
 
-		PlayerClassData updated = current.withClass(clazz);
+		setClass(player, clazz, ClassProgression.MIN_LEVEL);
+	}
+
+	public static void setClass(ServerPlayer player, WildMagicClass clazz, int level) {
+		PlayerClassData updated = PlayerClassData.createForClass(clazz, level);
+		PLAYER_DATA.put(player.getUUID(), updated);
+		sync(player);
+		save(currentServer);
+	}
+
+	public static void clearClass(ServerPlayer player) {
+		PLAYER_DATA.remove(player.getUUID());
+		sync(player);
+		save(currentServer);
+	}
+
+	public static void setActiveAbility(ServerPlayer player, int slot, String abilityId) {
+		PlayerClassData current = get(player);
+		if (!current.hasClass() || slot < 0 || slot >= PlayerClassData.ACTIVE_SLOT_COUNT) {
+			sync(player);
+			return;
+		}
+
+		if (abilityId == null || abilityId.isBlank()) {
+			updateActiveAbility(player, current, slot, "");
+			return;
+		}
+
+		AbilityDefinition ability = ClassProgression.abilityFor(current.selectedClass(), abilityId).orElse(null);
+		if (ability == null || ability.passive() || !ability.isUnlocked(current)) {
+			sync(player);
+			return;
+		}
+
+		updateActiveAbility(player, current, slot, ability.id());
+	}
+
+	public static void useActiveAbility(ServerPlayer player, int slot) {
+		PlayerClassData current = get(player);
+		if (!current.hasClass() || slot < 0 || slot >= PlayerClassData.ACTIVE_SLOT_COUNT) {
+			return;
+		}
+
+		String abilityId = current.activeAbility(slot);
+		if (abilityId.isBlank()) {
+			return;
+		}
+
+		ClassProgression.abilityFor(current.selectedClass(), abilityId)
+				.filter(ability -> !ability.passive() && ability.isUnlocked(current))
+				.ifPresent(ability -> player.sendSystemMessage(Component.literal("Использована способность: " + ability.title())));
+	}
+
+	private static void updateActiveAbility(ServerPlayer player, PlayerClassData current, int slot, String abilityId) {
+		PlayerClassData updated = current.withActiveAbility(slot, abilityId);
 		PLAYER_DATA.put(player.getUUID(), updated);
 		sync(player);
 		save(currentServer);

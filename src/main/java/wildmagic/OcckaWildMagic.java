@@ -4,6 +4,7 @@ import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import wildmagic.network.WildMagicNetworking;
+import wildmagic.server.WildMagicCommands;
 import wildmagic.server.WildMagicServerState;
 
 public class OcckaWildMagic implements ModInitializer {
@@ -15,6 +16,7 @@ public class OcckaWildMagic implements ModInitializer {
 		WildMagicNetworking.registerPayloadTypes();
 		WildMagicNetworking.registerServerReceivers();
 		WildMagicServerState.registerEvents();
+		WildMagicCommands.register();
 		LOGGER.info("Occka Wild Magic class framework initialized");
 	}
 }
