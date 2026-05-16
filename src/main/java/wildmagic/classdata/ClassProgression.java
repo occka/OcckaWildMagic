@@ -69,7 +69,7 @@ new AbilityDefinition("bard_slow_zone", "Замедление", "Снаряд с
 new AbilityDefinition("bard_dimension_door", "Переносящая дверь", "Телепортирует барда и союзника рядом до 150 блоков вперёд или сквозь стены.", 7, 0, 140),
 new AbilityDefinition("bard_greater_invisibility", "Высшая невидимость", "Бард и союзники в радиусе 1 блока невидимы 25с, не снимается атакой.", 7, 0, 140),
 new AbilityDefinition("bard_force_cage", "Силовая клетка", "Создаёт клетку из стекла вокруг цели (25 блоков) на 25с. Внутри нельзя использовать магию.", 12, 300, 180),
-new AbilityDefinition("bard_mordenkainen_sword", "Меч Морденкайнена", "Призрачный меч рядом с бардом на 1 минуту. При атаке наносит +5-15 доп. урона.", 12, 240, 170),
+new AbilityDefinition("bard_mordenkainen_sword", "Меч Морденкайнена", "Даёт Силу II на 1 минуту.", 12, 240, 170),
 new AbilityDefinition("bard_haste", "Скороход", "Скорость III всем в радиусе 5 блоков на 1.5 минуты.", 8, 0, 30),
 new AbilityDefinition("bard_feather_fall", "Падение перышком", "Плавное падение II всем в радиусе 5 блоков на минуту.", 8, 0, 30),
 new AbilityDefinition("bard_hypnotic_pattern", "Завораживающий узор", "Спираль над бардом — все в радиусе 25 блоков останавливаются и смотрят на неё 8с.", 9, 0, 160),
@@ -81,6 +81,15 @@ new AbilityDefinition("bard_light_step", "Лёгкая поступь", "Пас�
 new AbilityDefinition("bard_college_of_swords", "Коллегия мечей", "Пассивка: с мечом в руке — дальше, быстрее, +2 урона.", 10, 0, 0, true),
 new AbilityDefinition("bard_fragile_performer", "Хрупкий исполнитель", "Пассивка: -2 сердца. Нельзя использовать заклинания в алмазной или незеритовой броне.", 1, 0, 0, true)
 			);
+		}
+		if (clazz == WildMagicClass.WIZARD) {
+			return WizardAbilities.create();
+		}
+		if (clazz == WildMagicClass.SORCERER) {
+			return SorcererAbilities.create();
+		}
+		if (clazz == WildMagicClass.WARLOCK) {
+			return WarlockAbilities.create();
 		}
 
 		String resource = clazz.usesMana() ? "мана" : "кд";

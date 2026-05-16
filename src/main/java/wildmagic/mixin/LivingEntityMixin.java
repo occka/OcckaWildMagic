@@ -51,6 +51,7 @@ private void occkaWildMagic$mordenkainenSwordBonus(net.minecraft.server.level.Se
     if (!cir.getReturnValue()) return;
     if (SWORD_PROCESSING.get()) return;
     if (!(source.getEntity() instanceof net.minecraft.server.level.ServerPlayer attacker)) return;
+    if (!source.is(net.minecraft.world.damagesource.DamageTypes.PLAYER_ATTACK)) return;
     if (!WildMagicServerState.isMordenkainenActive(attacker)) return;
 
     LivingEntity self = (LivingEntity)(Object)this;
