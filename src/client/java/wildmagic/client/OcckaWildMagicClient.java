@@ -40,7 +40,7 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 	}
 
 	private static void registerNetworking() {
-		ClientPlayNetworking.registerGlobalReceiver(WildMagicNetworking.SyncClassDataS2CPayload.TYPE, (payload, context) -> context.client().execute(() -> ClientClassState.update(PlayerClassData.deserialize(payload.serializedData()))));
+		ClientPlayNetworking.registerGlobalReceiver(WildMagicNetworking.SyncClassDataS2CPayload.TYPE, (payload, context) -> context.client().execute(() -> ClientClassState.update(payload.serializedData())));
 	}
 
 	private static void registerKeybind() {
@@ -126,8 +126,20 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 			return "-";
 		}
 
+		int remainingCooldown = ClientClassState.remainingCooldownSeconds(slot);
+		if (remainingCooldown > 0) {
+			return remainingCooldown + "s";
+		}
+
 		return wildmagic.classdata.ClassProgression.abilityFor(data.selectedClass(), abilityId)
-				.map(ability -> ability.manaCost() > 0 ? ability.manaCost() + "M" : ability.cooldownSeconds() + "s")
+				.map(ability -> {
+					int cooldown = wildmagic.classdata.ClassProgression.effectiveCooldownSeconds(ability, data);
+					int manaCost = wildmagic.classdata.ClassProgression.effectiveManaCost(ability, data);
+					if (!data.selectedClass().usesMana() || manaCost <= 0) {
+						return cooldown > 0 ? cooldown + "s" : "OK";
+					}
+					return manaCost + "M";
+				})
 				.orElse("?");
 	}
 

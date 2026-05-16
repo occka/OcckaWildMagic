@@ -11,6 +11,7 @@ import wildmagic.server.WildMagicServerState;
 
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin {
+    private static final ThreadLocal<Boolean> SWORD_PROCESSING = ThreadLocal.withInitial(() -> false);
 
     @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
     private void occkaWildMagic$checkCharm(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
@@ -24,18 +25,18 @@ public class LivingEntityMixin {
     }
 
     @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
-private void occkaWildMagic$checkHeroismPoison(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
-    LivingEntity self = (LivingEntity)(Object)this;
-    if (!(self instanceof net.minecraft.server.level.ServerPlayer player)) return;
-    if (!WildMagicServerState.isHeroismActive(player)) return;
+    private void occkaWildMagic$checkHeroismPoison(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity)(Object)this;
+        if (!(self instanceof net.minecraft.server.level.ServerPlayer player)) return;
+        if (!WildMagicServerState.isHeroismActive(player)) return;
 
-    String damageKey = source.typeHolder().unwrapKey()
-            .map(Object::toString)
-            .orElse("");
-    if (damageKey.contains("poison") || damageKey.contains("wither")) {
-        cir.setReturnValue(false);
+        String damageKey = source.typeHolder().unwrapKey()
+                .map(Object::toString)
+                .orElse("");
+        if (damageKey.contains("poison") || damageKey.contains("wither")) {
+            cir.setReturnValue(false);
+        }
     }
-}
 
     @Inject(method = "hurtServer", at = @At("HEAD"))
     private void occkaWildMagic$breakInvisibilityOnAttack(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
@@ -44,23 +45,32 @@ private void occkaWildMagic$checkHeroismPoison(net.minecraft.server.level.Server
         }
     }
 
-    private static final ThreadLocal<Boolean> SWORD_PROCESSING = ThreadLocal.withInitial(() -> false);
+    @Inject(method = "hurtServer", at = @At("RETURN"))
+    private void occkaWildMagic$armorOfAgathys(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue() || amount <= 0.0F) return;
+        LivingEntity self = (LivingEntity)(Object)this;
+        if (!(self instanceof net.minecraft.server.level.ServerPlayer player)) return;
+        if (!(source.getEntity() instanceof LivingEntity attacker)) return;
+        if (attacker == self) return;
 
-@Inject(method = "hurtServer", at = @At("RETURN"))
-private void occkaWildMagic$mordenkainenSwordBonus(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
-    if (!cir.getReturnValue()) return;
-    if (SWORD_PROCESSING.get()) return;
-    if (!(source.getEntity() instanceof net.minecraft.server.level.ServerPlayer attacker)) return;
-    if (!source.is(net.minecraft.world.damagesource.DamageTypes.PLAYER_ATTACK)) return;
-    if (!WildMagicServerState.isMordenkainenActive(attacker)) return;
-
-    LivingEntity self = (LivingEntity)(Object)this;
-    SWORD_PROCESSING.set(true);
-    try {
-        float bonus = 5.0F + attacker.getRandom().nextFloat() * 10.0F;
-        self.hurtServer(level, attacker.damageSources().playerAttack(attacker), bonus);
-    } finally {
-        SWORD_PROCESSING.set(false);
+        WildMagicServerState.onPlayerDamaged(player, attacker, level);
     }
-}
+
+    @Inject(method = "hurtServer", at = @At("RETURN"))
+    private void occkaWildMagic$mordenkainenSwordBonus(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue()) return;
+        if (SWORD_PROCESSING.get()) return;
+        if (!(source.getEntity() instanceof net.minecraft.server.level.ServerPlayer attacker)) return;
+        if (!source.is(net.minecraft.world.damagesource.DamageTypes.PLAYER_ATTACK)) return;
+        if (!WildMagicServerState.isMordenkainenActive(attacker)) return;
+
+        LivingEntity self = (LivingEntity)(Object)this;
+        SWORD_PROCESSING.set(true);
+        try {
+            float bonus = 5.0F + attacker.getRandom().nextFloat() * 10.0F;
+            self.hurtServer(level, attacker.damageSources().playerAttack(attacker), bonus);
+        } finally {
+            SWORD_PROCESSING.set(false);
+        }
+    }
 }
