@@ -149,8 +149,14 @@ private void initClassDetails(PlayerClassData data) {
         graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
     }
 
-    // подсказка
-    drawCentered(graphics, Component.literal("[П] — пассивка, работает всегда. Выбери слот сверху, затем нажми способность."), width / 2, height - 14, 0xFF888888);
+    // описание выбранной способности
+String selectedId = data.activeAbility(selectedAbilitySlot);
+if (!selectedId.isBlank()) {
+    ClassProgression.abilityFor(data.selectedClass(), selectedId).ifPresent(ability -> {
+        drawCentered(graphics, Component.literal(ability.description()).withStyle(ChatFormatting.GRAY), width / 2, height - 24, 0xFFCCCCCC);
+    });
+}
+drawCentered(graphics, Component.literal("[П] — пассивка, работает всегда. Выбери слот сверху, затем нажми способность."), width / 2, height - 14, 0xFF888888);
 }
 
 	private String abilityTitle(WildMagicClass clazz, String abilityId) {

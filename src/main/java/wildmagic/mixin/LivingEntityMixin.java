@@ -43,4 +43,23 @@ private void occkaWildMagic$checkHeroismPoison(net.minecraft.server.level.Server
             WildMagicServerState.breakInvisibility(attacker);
         }
     }
+
+    private static final ThreadLocal<Boolean> SWORD_PROCESSING = ThreadLocal.withInitial(() -> false);
+
+@Inject(method = "hurtServer", at = @At("RETURN"))
+private void occkaWildMagic$mordenkainenSwordBonus(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+    if (!cir.getReturnValue()) return;
+    if (SWORD_PROCESSING.get()) return;
+    if (!(source.getEntity() instanceof net.minecraft.server.level.ServerPlayer attacker)) return;
+    if (!WildMagicServerState.isMordenkainenActive(attacker)) return;
+
+    LivingEntity self = (LivingEntity)(Object)this;
+    SWORD_PROCESSING.set(true);
+    try {
+        float bonus = 5.0F + attacker.getRandom().nextFloat() * 10.0F;
+        self.hurtServer(level, attacker.damageSources().playerAttack(attacker), bonus);
+    } finally {
+        SWORD_PROCESSING.set(false);
+    }
+}
 }
