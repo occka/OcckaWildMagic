@@ -55,40 +55,52 @@ public class ClassMenuScreen extends Screen {
 		}).bounds(width / 2 - 70, height - 34, 140, 20).build());
 	}
 
-	private void initClassDetails(PlayerClassData data) {
-		int slotWidth = 86;
-		int slotStartX = width / 2 - 134;
-		for (int slot = 0; slot < PlayerClassData.ACTIVE_SLOT_COUNT; slot++) {
-			int currentSlot = slot;
-			String abilityTitle = abilityTitle(data.selectedClass(), data.activeAbility(slot));
-			Component slotLabel = Component.literal((selectedAbilitySlot == slot ? "> " : "") + "Слот " + (slot + 1) + ": " + abilityTitle);
-			addRenderableWidget(Button.builder(slotLabel, button -> selectedAbilitySlot = currentSlot)
-					.bounds(slotStartX + slot * (slotWidth + 6), 64, slotWidth, 20)
-					.build());
-		}
+private void initClassDetails(PlayerClassData data) {
+    int slotWidth = 86;
+    int slotStartX = width / 2 - 134;
+    for (int slot = 0; slot < PlayerClassData.ACTIVE_SLOT_COUNT; slot++) {
+        int currentSlot = slot;
+        String abilityTitle = abilityTitle(data.selectedClass(), data.activeAbility(slot));
+        Component slotLabel = Component.literal((selectedAbilitySlot == slot ? "> " : "") + "Слот " + (slot + 1) + ": " + abilityTitle);
+        addRenderableWidget(Button.builder(slotLabel, button -> selectedAbilitySlot = currentSlot)
+                .bounds(slotStartX + slot * (slotWidth + 6), 64, slotWidth, 20)
+                .build());
+    }
 
-		addRenderableWidget(Button.builder(Component.literal("Очистить слот " + (selectedAbilitySlot + 1)), button -> equipAbility(""))
-				.bounds(width / 2 - 70, 88, 140, 20)
-				.build());
+    addRenderableWidget(Button.builder(Component.literal("Очистить слот " + (selectedAbilitySlot + 1)), button -> equipAbility(""))
+            .bounds(width / 2 - 70, 88, 140, 20)
+            .build());
 
-		List<AbilityDefinition> abilities = ClassProgression.abilitiesFor(data.selectedClass());
-		int startX = width / 2 - 150;
-		int startY = 116;
-		for (int i = 0; i < abilities.size(); i++) {
-			AbilityDefinition ability = abilities.get(i);
-			boolean unlocked = ability.isUnlocked(data);
-			String marker = ability.passive() ? "Пассивка: " : unlocked ? "Активная: " : "Закрыта: ";
-			String resource = ability.passive() ? "всегда" : ability.manaCost() > 0 ? ability.manaCost() + " маны" : ability.cooldownSeconds() + "с кд";
-			Component label = Component.literal(marker + ability.title() + " (ур. " + ability.unlockLevel() + ", " + resource + ")");
-			addRenderableWidget(Button.builder(label, button -> {
-				if (ability.canBeEquipped() && ability.isUnlocked(ClientClassState.data())) {
-					equipAbility(ability.id());
-				}
-			})
-					.bounds(startX, startY + i * 24, 300, 20)
-					.build());
-		}
-	}
+    List<AbilityDefinition> abilities = ClassProgression.abilitiesFor(data.selectedClass());
+
+    int colCount = 4;
+    int btnWidth = (width - 20) / colCount - 4;
+    int btnHeight = 20;
+    int gridStartX = 10;
+    int gridStartY = 116;
+    int colIndex = 0;
+    int rowIndex = 0;
+
+    for (AbilityDefinition ability : abilities) {
+        if (!ability.isUnlocked(data)) continue;
+
+        int x = gridStartX + colIndex * (btnWidth + 4);
+        int y = gridStartY + rowIndex * (btnHeight + 4);
+
+        Component label = Component.literal(ability.passive() ? "[П] " + ability.title() : ability.title());
+        addRenderableWidget(Button.builder(label, button -> {
+            if (ability.canBeEquipped() && ability.isUnlocked(ClientClassState.data())) {
+                equipAbility(ability.id());
+            }
+        }).bounds(x, y, btnWidth, btnHeight).build());
+
+        colIndex++;
+        if (colIndex >= colCount) {
+            colIndex = 0;
+            rowIndex++;
+        }
+    }
+}
 
 	private void equipAbility(String abilityId) {
 		ClientClassState.setActiveAbility(selectedAbilitySlot, abilityId);
@@ -118,23 +130,28 @@ public class ClassMenuScreen extends Screen {
 	}
 
 	private void renderClassDetails(GuiGraphicsExtractor graphics, PlayerClassData data) {
-		WildMagicClass clazz = data.selectedClass();
-		drawCentered(graphics, Component.literal(clazz.displayName() + " — уровень " + data.level()).withStyle(ChatFormatting.GOLD), width / 2, 18, 0xFFFFFFFF);
-		drawCentered(graphics, Component.literal(clazz.shortDescription()), width / 2, 34, 0xFFC8C8C8);
-		int barX = width / 2 - 100;
-		int barY = 48;
-		graphics.fill(barX, barY, barX + 200, barY + 8, 0xFF232333);
-		graphics.fill(barX, barY, barX + Math.round(200 * data.expProgress()), barY + 8, 0xFF7D4CDB);
-		if (data.level() >= ClassProgression.MAX_LEVEL) {
-			drawCentered(graphics, Component.literal("Максимальный уровень класса"), width / 2, barY + 10, 0xFFFFFFFF);
-		} else {
-			drawCentered(graphics, Component.literal("До уровня " + (data.level() + 1) + ": " + data.exp() + " / " + data.expRequiredForNextLevel() + " class exp"), width / 2, barY + 10, 0xFFFFFFFF);
-		}
-		if (clazz.usesMana()) {
-			graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
-		}
-		drawCentered(graphics, Component.literal("Выбери слот сверху, затем активную способность ниже. Пассивки работают всегда."), width / 2, height - 24, 0xFFC8C8C8);
-	}
+    WildMagicClass clazz = data.selectedClass();
+    drawCentered(graphics, Component.literal(clazz.displayName() + " — уровень " + data.level()).withStyle(ChatFormatting.GOLD), width / 2, 18, 0xFFFFFFFF);
+    drawCentered(graphics, Component.literal(clazz.shortDescription()), width / 2, 34, 0xFFC8C8C8);
+
+    int barX = width / 2 - 100;
+    int barY = 48;
+    graphics.fill(barX, barY, barX + 200, barY + 8, 0xFF232333);
+    graphics.fill(barX, barY, barX + Math.round(200 * data.expProgress()), barY + 8, 0xFF7D4CDB);
+
+    if (data.level() >= ClassProgression.MAX_LEVEL) {
+        drawCentered(graphics, Component.literal("Максимальный уровень класса"), width / 2, barY + 10, 0xFFFFFFFF);
+    } else {
+        drawCentered(graphics, Component.literal("До уровня " + (data.level() + 1) + ": " + data.exp() + " / " + data.expRequiredForNextLevel() + " exp"), width / 2, barY + 10, 0xFFFFFFFF);
+    }
+
+    if (clazz.usesMana()) {
+        graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
+    }
+
+    // подсказка
+    drawCentered(graphics, Component.literal("[П] — пассивка, работает всегда. Выбери слот сверху, затем нажми способность."), width / 2, height - 14, 0xFF888888);
+}
 
 	private String abilityTitle(WildMagicClass clazz, String abilityId) {
 		if (abilityId == null || abilityId.isBlank()) {

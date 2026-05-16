@@ -24,6 +24,7 @@ import wildmagic.classdata.ClassProgression;
 import wildmagic.classdata.PlayerClassData;
 import wildmagic.classdata.WildMagicClass;
 import wildmagic.network.WildMagicNetworking;
+import net.minecraft.world.entity.player.Player;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -35,11 +36,17 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+
 public final class WildMagicServerState {
 	private static final Identifier BARD_HEALTH_MODIFIER_ID = Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "bard_fragile_performer");
 	private static final double BARD_HEALTH_PENALTY = -4.0D;
 	private static final Map<UUID, PlayerClassData> PLAYER_DATA = new ConcurrentHashMap<>();
 	private static final Map<UUID, long[]> ABILITY_COOLDOWNS = new ConcurrentHashMap<>();
+	private static final Map<UUID, Map<UUID, Long>> CHARMED_TARGETS = new ConcurrentHashMap<>();
+	private static final Map<UUID, Long> HEROISM_TARGETS = new ConcurrentHashMap<>();
+private static final Map<UUID, Long> INVISIBLE_PLAYERS = new ConcurrentHashMap<>();
+private static final net.minecraft.resources.Identifier HEROISM_DAMAGE_MODIFIER_ID = 
+    net.minecraft.resources.Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "heroism_damage");
 	private static MinecraftServer currentServer;
 	private static Path saveFile;
 
@@ -75,6 +82,9 @@ public final class WildMagicServerState {
 		PlayerClassData updated = PlayerClassData.createForClass(clazz, level);
 		PLAYER_DATA.put(player.getUUID(), updated);
 		ABILITY_COOLDOWNS.remove(player.getUUID());
+		CHARMED_TARGETS.remove(player.getUUID());
+		HEROISM_TARGETS.remove(player.getUUID());
+INVISIBLE_PLAYERS.remove(player.getUUID());
 		applyClassPassives(player);
 		sync(player);
 		save(currentServer);
@@ -83,6 +93,9 @@ public final class WildMagicServerState {
 	public static void clearClass(ServerPlayer player) {
 		PLAYER_DATA.remove(player.getUUID());
 		ABILITY_COOLDOWNS.remove(player.getUUID());
+		CHARMED_TARGETS.remove(player.getUUID());
+		HEROISM_TARGETS.remove(player.getUUID());
+INVISIBLE_PLAYERS.remove(player.getUUID());
 		removeClassPassives(player);
 		sync(player);
 		save(currentServer);
@@ -127,9 +140,18 @@ public final class WildMagicServerState {
 			return;
 		}
 
+				// прерываем невидимость при касте любого заклинания кроме самой невидимости
+if (!ability.id().equals("bard_invisibility")) {
+    breakInvisibility(player);
+}
+
 		boolean used = switch (ability.id()) {
 			case "bard_inspiration" -> useBardInspiration(player);
-			case "bard_sound_wave" -> useBardSoundWave(player);
+case "bard_healing_word" -> useBardHealingWord(player);
+case "bard_sound_wave" -> useBardSoundWave(player);
+case "bard_charm" -> useBardCharm(player);
+case "bard_heroism" -> useBardHeroism(player);
+case "bard_invisibility" -> useBardInvisibility(player);
 			default -> usePlaceholderAbility(player, ability);
 		};
 		if (!used) {
@@ -141,6 +163,22 @@ public final class WildMagicServerState {
 		setCooldown(player, slot, ability.cooldownSeconds());
 		sync(player);
 	}
+
+	public static boolean isCharmed(LivingEntity attacker, Player target) {
+    if (!(target instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) return false;
+    Map<UUID, Long> charmed = CHARMED_TARGETS.get(serverPlayer.getUUID());
+    if (charmed == null) return false;
+
+    Long expireTime = charmed.get(attacker.getUUID());
+    if (expireTime == null) return false;
+
+    if (serverPlayer.level().getGameTime() > expireTime) {
+        charmed.remove(attacker.getUUID());
+        return false;
+    }
+
+    return true;
+}
 
 	private static boolean hasEnoughMana(ServerPlayer player, PlayerClassData data, AbilityDefinition ability) {
 		if (ability.manaCost() <= 0 || !data.selectedClass().usesMana()) {
@@ -180,41 +218,177 @@ public final class WildMagicServerState {
 	}
 
 	private static boolean useBardInspiration(ServerPlayer player) {
-		ServerLevel level = player.level();
-		AABB area = player.getBoundingBox().inflate(5.0D);
-		for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, area)) {
-			entity.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1), player);
-			entity.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 600, 5), player);
-		}
+    ServerLevel level = player.level();
+    AABB area = player.getBoundingBox().inflate(5.0D);
+
+    // только игроки, без партиклов
+    for (ServerPlayer target : level.getEntitiesOfClass(ServerPlayer.class, area)) {
+        target.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1), player);
+        target.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 600, 5), player);
+    }
 
 		level.sendParticles(ParticleTypes.NOTE, player.getX(), player.getY() + 1.2D, player.getZ(), 32, 1.5D, 0.8D, 1.5D, 0.1D);
+		level.playSound(null, player.getX(), player.getY(), player.getZ(),
+        net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HARP.value(),
+        net.minecraft.sounds.SoundSource.PLAYERS,
+        1.0F, 1.2F);
+
 		return true;
 	}
+
+	private static boolean useBardInvisibility(ServerPlayer player) {
+    INVISIBLE_PLAYERS.put(player.getUUID(), player.level().getGameTime() + 60 * 20L);
+    player.setInvisible(true);
+
+    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+            net.minecraft.sounds.SoundEvents.CHORUS_FRUIT_TELEPORT,
+            net.minecraft.sounds.SoundSource.PLAYERS, 0.6F, 1.4F);
+    return true;
+}
+
+	private static boolean useBardHealingWord(ServerPlayer player) {
+    ServerLevel level = player.level();
+    LivingEntity target = raycastLivingEntity(player, 12.0D);
+
+    LivingEntity healTarget = target != null ? target : player;
+    float heal = 2.0F + player.getRandom().nextFloat() * 6.0F + get(player).level();
+    healTarget.heal(heal);
+
+    level.sendParticles(ParticleTypes.HEART,
+            healTarget.getX(), healTarget.getY() + healTarget.getBbHeight() + 0.3D, healTarget.getZ(),
+            6, 0.3D, 0.3D, 0.3D, 0.05D);
+    level.playSound(null, healTarget.getX(), healTarget.getY(), healTarget.getZ(),
+            net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HARP.value(),
+            net.minecraft.sounds.SoundSource.PLAYERS,
+            1.0F, 1.8F);
+    return true;
+}
+
+private static boolean useBardCharm(ServerPlayer player) {
+    ServerLevel level = player.level();
+    LivingEntity target = raycastLivingEntity(player, 20.0D);
+    if (target == null) {
+        return false;
+    }
+
+    CHARMED_TARGETS.computeIfAbsent(player.getUUID(), k -> new ConcurrentHashMap<>())
+            .put(target.getUUID(), level.getGameTime() + 15 * 20L);
+
+    level.sendParticles(ParticleTypes.ENCHANT,
+            target.getX(), target.getY() + target.getBbHeight() / 2, target.getZ(),
+            20, 0.5D, 0.8D, 0.5D, 0.1D);
+    level.playSound(null, target.getX(), target.getY(), target.getZ(),
+            net.minecraft.sounds.SoundEvents.NOTE_BLOCK_CHIME.value(),
+            net.minecraft.sounds.SoundSource.PLAYERS,
+            1.0F, 0.8F);
+    return true;
+}
+
+private static boolean useBardHeroism(ServerPlayer player) {
+    ServerLevel level = player.level();
+    LivingEntity target = raycastLivingEntity(player, 12.0D);
+    long expireTime = level.getGameTime() + 20 * 20L;
+
+    applyHeroism(player, level, expireTime);
+    if (target instanceof ServerPlayer targetPlayer) {
+        applyHeroism(targetPlayer, level, expireTime);
+    }
+    return true;
+}
+
+private static void applyHeroism(ServerPlayer player, ServerLevel level, long expireTime) {
+    HEROISM_TARGETS.put(player.getUUID(), expireTime);
+
+    net.minecraft.world.entity.ai.attributes.AttributeInstance dmg = 
+        player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+    if (dmg != null && dmg.getModifier(HEROISM_DAMAGE_MODIFIER_ID) == null) {
+        dmg.addPermanentModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+            HEROISM_DAMAGE_MODIFIER_ID, 3.0D,
+            net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));
+    }
+
+    level.sendParticles(ParticleTypes.WAX_ON,
+            player.getX(), player.getY() + player.getBbHeight() + 0.5D, player.getZ(),
+            12, 0.4D, 0.2D, 0.4D, 0.05D);
+    level.playSound(null, player.getX(), player.getY(), player.getZ(),
+            net.minecraft.sounds.SoundEvents.NOTE_BLOCK_BELL.value(),
+            net.minecraft.sounds.SoundSource.PLAYERS, 1.0F, 1.2F);
+}
+
+private static void removeHeroism(ServerPlayer player) {
+    net.minecraft.world.entity.ai.attributes.AttributeInstance dmg =
+        player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+    if (dmg != null) {
+        dmg.removeModifier(HEROISM_DAMAGE_MODIFIER_ID);
+    }
+}
 
 	private static boolean useBardSoundWave(ServerPlayer player) {
-		ServerLevel level = player.level();
-		Vec3 look = player.getLookAngle().normalize();
-		Set<LivingEntity> hitEntities = new HashSet<>();
-		for (int step = 1; step <= 6; step++) {
-			Vec3 center = player.position().add(0.0D, 1.0D, 0.0D).add(look.scale(step));
-			level.sendParticles(ParticleTypes.NOTE, center.x, center.y, center.z, 8, 1.0D, 1.0D, 1.0D, 0.0D);
-			AABB waveBox = new AABB(center.x - 1.5D, center.y - 1.5D, center.z - 1.5D, center.x + 1.5D, center.y + 1.5D, center.z + 1.5D);
-			for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, waveBox, entity -> entity != player)) {
-				if (hitEntities.add(target)) {
-					float damage = 4.0F + (player.getRandom().nextFloat() * 6.0F);
-					target.hurtServer(level, player.damageSources().playerAttack(player), damage);
-					target.push(look.x * 0.8D, 0.45D, look.z * 0.8D);
-				}
-			}
-		}
+    ServerLevel level = player.level();
+    Vec3 look = player.getLookAngle().normalize();
+    Set<LivingEntity> hitEntities = new HashSet<>();
 
-		return true;
-	}
+    for (int step = 1; step <= 6; step++) {
+        Vec3 center = player.position().add(0.0D, 1.0D, 0.0D).add(look.scale(step));
+
+        // партиклы похожие на звуковую волну
+        level.sendParticles(ParticleTypes.SCULK_SOUL,
+                center.x, center.y, center.z,
+                6, 0.4D, 0.4D, 0.4D, 0.08D);
+        level.sendParticles(ParticleTypes.SONIC_BOOM,
+                center.x, center.y, center.z,
+                1, 0.0D, 0.0D, 0.0D, 0.0D);
+
+        AABB waveBox = new AABB(
+                center.x - 1.5D, center.y - 1.5D, center.z - 1.5D,
+                center.x + 1.5D, center.y + 1.5D, center.z + 1.5D);
+
+        for (LivingEntity target : level.getEntitiesOfClass(
+                LivingEntity.class, waveBox, entity -> entity != player)) {
+            if (hitEntities.add(target)) {
+                float damage = 4.0F + (player.getRandom().nextFloat() * 6.0F);
+                target.hurtServer(level, player.damageSources().playerAttack(player), damage);
+                target.push(look.x * 0.8D, 0.45D, look.z * 0.8D);
+            }
+        }
+    }
+
+    // звук грома
+    level.playSound(null, player.getX(), player.getY(), player.getZ(),
+            net.minecraft.sounds.SoundEvents.LIGHTNING_BOLT_THUNDER,
+            net.minecraft.sounds.SoundSource.PLAYERS,
+            0.8F, 1.4F);
+
+    return true;
+}
 
 	private static boolean usePlaceholderAbility(ServerPlayer player, AbilityDefinition ability) {
 		player.sendSystemMessage(Component.literal("Использована способность: " + ability.title()));
 		return true;
 	}
+
+	private static LivingEntity raycastLivingEntity(ServerPlayer player, double range) {
+    Vec3 start = player.getEyePosition();
+    Vec3 end = start.add(player.getLookAngle().normalize().scale(range));
+    AABB searchBox = player.getBoundingBox().expandTowards(player.getLookAngle().scale(range)).inflate(1.5D);
+
+    LivingEntity closest = null;
+    double closestDist = Double.MAX_VALUE;
+
+    for (LivingEntity entity : player.level().getEntitiesOfClass(LivingEntity.class, searchBox, e -> e != player && e.isAlive())) {
+        AABB hitbox = entity.getBoundingBox().inflate(0.3D);
+        var hit = hitbox.clip(start, end);
+        if (hit.isPresent()) {
+            double dist = start.distanceTo(hit.get());
+            if (dist < closestDist) {
+                closestDist = dist;
+                closest = entity;
+            }
+        }
+    }
+
+    return closest;
+}
 
 	private static void updateActiveAbility(ServerPlayer player, PlayerClassData current, int slot, String abilityId) {
 		PlayerClassData updated = current.withActiveAbility(slot, abilityId);
@@ -223,21 +397,21 @@ public final class WildMagicServerState {
 		save(currentServer);
 	}
 
-	public static void addAdvancementExp(ServerPlayer player) {
-		PlayerClassData current = get(player);
-		if (!current.hasClass()) {
-			return;
-		}
+	public static void addAdvancementExp(ServerPlayer player, int amount) {
+    PlayerClassData current = get(player);
+    if (!current.hasClass()) {
+        return;
+    }
 
-		PlayerClassData updated = current.withExp(current.exp() + 1);
-		while (updated.level() < ClassProgression.MAX_LEVEL && updated.exp() >= updated.expRequiredForNextLevel()) {
-			updated = updated.withExp(updated.exp() - updated.expRequiredForNextLevel()).withLevel(updated.level() + 1);
-		}
-		PLAYER_DATA.put(player.getUUID(), updated);
-		applyClassPassives(player);
-		sync(player);
-		save(currentServer);
-	}
+    PlayerClassData updated = current.withExp(current.exp() + amount);
+    while (updated.level() < ClassProgression.MAX_LEVEL && updated.exp() >= updated.expRequiredForNextLevel()) {
+        updated = updated.withExp(updated.exp() - updated.expRequiredForNextLevel()).withLevel(updated.level() + 1);
+    }
+    PLAYER_DATA.put(player.getUUID(), updated);
+    applyClassPassives(player);
+    sync(player);
+    save(currentServer);
+}
 
 	public static void sync(ServerPlayer player) {
 		WildMagicNetworking.sendClassData(player, get(player));
@@ -247,6 +421,18 @@ public final class WildMagicServerState {
 		if (server.getTickCount() % 20 != 0) {
 			return;
 		}
+		tickHeroism(server);
+		tickInvisibility(server);
+
+		CHARMED_TARGETS.forEach((playerUuid, targets) ->
+    targets.entrySet().removeIf(entry -> {
+        MinecraftServer srv = currentServer;
+        if (srv == null) return true;
+        ServerPlayer p = srv.getPlayerList().getPlayer(playerUuid);
+        if (p == null) return true;
+        return p.level().getGameTime() > entry.getValue();
+    })
+);
 
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			applyClassPassives(player);
@@ -264,6 +450,69 @@ public final class WildMagicServerState {
 		PLAYER_DATA.put(player.getUUID(), updated);
 		sync(player);
 	}
+
+	private static void tickHeroism(MinecraftServer server) {
+    // раз в секунду
+    if (server.getTickCount() % 20 != 0) return;
+
+    HEROISM_TARGETS.entrySet().removeIf(entry -> {
+        ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+        if (player == null) return true;
+
+if (player.level().getGameTime() > entry.getValue()) {
+    removeHeroism(player);
+    return true;
+}
+
+        // снимаем яд и иссушение если наложились
+        player.removeEffect(net.minecraft.world.effect.MobEffects.POISON);
+        player.removeEffect(net.minecraft.world.effect.MobEffects.WITHER);
+
+        // нимб — несколько золотых партиклов по кругу над головой
+        double r = 0.4D;
+        double baseY = player.getY() + player.getBbHeight() + 0.3D;
+        ServerLevel level = player.level();
+        for (int i = 0; i < 4; i++) {
+            double angle = (server.getTickCount() % 40) / 40.0D * 2 * Math.PI + (i * Math.PI / 2);
+            level.sendParticles(ParticleTypes.WAX_ON,
+                    player.getX() + Math.cos(angle) * r,
+                    baseY,
+                    player.getZ() + Math.sin(angle) * r,
+                    1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+
+        return false;
+    });
+}
+
+private static void tickInvisibility(MinecraftServer server) {
+    if (server.getTickCount() % 20 != 0) return;
+    INVISIBLE_PLAYERS.entrySet().removeIf(entry -> {
+        ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+        if (player == null) return true;
+        if (player.level().getGameTime() > entry.getValue()) {
+            player.setInvisible(false);
+            return true;
+        }
+        return false;
+    });
+}
+
+public static void breakInvisibility(ServerPlayer player) {
+    if (INVISIBLE_PLAYERS.remove(player.getUUID()) != null) {
+        player.setInvisible(false);
+    }
+}
+
+public static boolean isHeroismActive(ServerPlayer player) {
+    Long expire = HEROISM_TARGETS.get(player.getUUID());
+    if (expire == null) return false;
+    if (player.level().getGameTime() > expire) {
+        HEROISM_TARGETS.remove(player.getUUID());
+        return false;
+    }
+    return true;
+}
 
 	private static void applyClassPassives(ServerPlayer player) {
 		PlayerClassData data = get(player);
