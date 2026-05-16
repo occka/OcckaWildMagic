@@ -53,6 +53,36 @@ public static int expRequiredForNextLevel(int currentLevel) {
 				.findFirst();
 	}
 
+	public static int effectiveCooldownSeconds(AbilityDefinition ability, PlayerClassData data) {
+		if (ability == null || data == null) {
+			return 0;
+		}
+
+		if ("warlock_mystic_charge".equals(ability.id()) && data.level() >= 10) {
+			return 2;
+		}
+
+		return ability.cooldownSeconds();
+	}
+
+	public static int effectiveManaCost(AbilityDefinition ability, PlayerClassData data) {
+		if (ability == null || data == null) {
+			return 0;
+		}
+
+		if ("warlock_armor_of_agathys".equals(ability.id())) {
+			if (data.level() >= 10) {
+				return 110;
+			}
+
+			if (data.level() >= 6) {
+				return 90;
+			}
+		}
+
+		return ability.manaCost();
+	}
+
 	private static List<AbilityDefinition> createStarterAbilities(WildMagicClass clazz) {
 		if (clazz == WildMagicClass.BARD) {
 			return List.of(
@@ -92,12 +122,6 @@ new AbilityDefinition("bard_fragile_performer", "Хрупкий исполнит
 			return WarlockAbilities.create();
 		}
 
-		String resource = clazz.usesMana() ? "мана" : "кд";
-		return List.of(
-				new AbilityDefinition(clazz.id() + "_starter", "Стартовая способность", "Базовая активная способность класса. Позже здесь будет точная механика и баланс.", 1, clazz.usesMana() ? 0 : 12, clazz.usesMana() ? 10 : 0),
-				new AbilityDefinition(clazz.id() + "_advanced", "Усиленный прием", "Активная способность с прокачкой. Использует ресурс: " + resource + ".", 4, clazz.usesMana() ? 0 : 24, clazz.usesMana() ? 25 : 0),
-				new AbilityDefinition(clazz.id() + "_mastery", "Мастерство класса", "Поздняя сильная активная способность для 8+ уровня.", 8, clazz.usesMana() ? 0 : 45, clazz.usesMana() ? 45 : 0),
-				new AbilityDefinition(clazz.id() + "_passive", "Пассивка класса", "Пассивная способность: работает всегда и не ставится в слот хотбара.", 1, 0, 0, true)
-		);
+		return MartialAbilities.create(clazz);
 	}
 }

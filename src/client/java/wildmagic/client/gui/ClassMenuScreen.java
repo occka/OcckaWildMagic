@@ -13,6 +13,7 @@ import wildmagic.classdata.WildMagicClass;
 import wildmagic.client.state.ClientClassState;
 import wildmagic.network.WildMagicNetworking;
 
+import java.util.Comparator;
 import java.util.List;
 
 public class ClassMenuScreen extends Screen {
@@ -71,7 +72,11 @@ private void initClassDetails(PlayerClassData data) {
             .bounds(width / 2 - 70, 88, 140, 20)
             .build());
 
-    List<AbilityDefinition> abilities = ClassProgression.abilitiesFor(data.selectedClass());
+    List<AbilityDefinition> abilities = ClassProgression.abilitiesFor(data.selectedClass()).stream()
+            .sorted(Comparator.comparing(AbilityDefinition::passive)
+                    .thenComparingInt(AbilityDefinition::unlockLevel)
+                    .thenComparing(AbilityDefinition::title))
+            .toList();
 
     int colCount = 4;
     int btnWidth = (width - 20) / colCount - 4;
@@ -87,7 +92,7 @@ private void initClassDetails(PlayerClassData data) {
         int x = gridStartX + colIndex * (btnWidth + 4);
         int y = gridStartY + rowIndex * (btnHeight + 4);
 
-        Component label = Component.literal(ability.passive() ? "[П] " + ability.title() : ability.title());
+        Component label = Component.literal(ability.passive() ? "[П] " + ability.title() : ability.title() + " (" + abilityResourceText(data, ability) + ")");
         addRenderableWidget(Button.builder(label, button -> {
             if (ability.canBeEquipped() && ability.isUnlocked(ClientClassState.data())) {
                 equipAbility(ability.id());
@@ -147,6 +152,8 @@ private void initClassDetails(PlayerClassData data) {
 
     if (clazz.usesMana()) {
         graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
+    } else {
+        graphics.text(font, Component.literal("Ресурс: КД способностей").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
     }
 
     // описание выбранной способности
@@ -158,6 +165,16 @@ if (!selectedId.isBlank()) {
 }
 drawCentered(graphics, Component.literal("[П] — пассивка, работает всегда. Выбери слот сверху, затем нажми способность."), width / 2, height - 14, 0xFF888888);
 }
+
+	private String abilityResourceText(PlayerClassData data, AbilityDefinition ability) {
+		int cooldown = ClassProgression.effectiveCooldownSeconds(ability, data);
+		int manaCost = ClassProgression.effectiveManaCost(ability, data);
+		if (!data.selectedClass().usesMana() || manaCost <= 0) {
+			return cooldown > 0 ? "КД " + cooldown + "с" : "без КД";
+		}
+
+		return manaCost + " маны" + (cooldown > 0 ? ", КД " + cooldown + "с" : "");
+	}
 
 	private String abilityTitle(WildMagicClass clazz, String abilityId) {
 		if (abilityId == null || abilityId.isBlank()) {
