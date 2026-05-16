@@ -19,7 +19,17 @@ public class LivingEntityMixin {
         if (!(source.getEntity() instanceof LivingEntity attacker)) return;
         if (!(self instanceof Player targetPlayer)) return;
 
-        if (WildMagicServerState.isCharmed(attacker, targetPlayer)) {
+        if (WildMagicServerState.isCharmed(attacker, targetPlayer) || WildMagicServerState.isFriendlySummonedUndead(attacker, targetPlayer)) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
+    private void occkaWildMagic$checkSummonedUndeadFriendlyFire(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity)(Object)this;
+        if (!(source.getEntity() instanceof LivingEntity attacker)) return;
+
+        if (WildMagicServerState.isFriendlySummonedUndead(attacker, self)) {
             cir.setReturnValue(false);
         }
     }
@@ -54,6 +64,15 @@ public class LivingEntityMixin {
         if (attacker == self) return;
 
         WildMagicServerState.onPlayerDamaged(player, attacker, level);
+    }
+
+    @Inject(method = "hurtServer", at = @At("RETURN"))
+    private void occkaWildMagic$undeadTouch(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue()) return;
+        if (!(source.getEntity() instanceof net.minecraft.server.level.ServerPlayer attacker)) return;
+
+        LivingEntity self = (LivingEntity)(Object)this;
+        WildMagicServerState.applyWarlockUndeadTouch(attacker, self);
     }
 
     @Inject(method = "hurtServer", at = @At("RETURN"))

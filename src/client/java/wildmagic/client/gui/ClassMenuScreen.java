@@ -13,6 +13,7 @@ import wildmagic.classdata.WildMagicClass;
 import wildmagic.client.state.ClientClassState;
 import wildmagic.network.WildMagicNetworking;
 
+import java.util.Comparator;
 import java.util.List;
 
 public class ClassMenuScreen extends Screen {
@@ -71,7 +72,11 @@ private void initClassDetails(PlayerClassData data) {
             .bounds(width / 2 - 70, 88, 140, 20)
             .build());
 
-    List<AbilityDefinition> abilities = ClassProgression.abilitiesFor(data.selectedClass());
+    List<AbilityDefinition> abilities = ClassProgression.abilitiesFor(data.selectedClass()).stream()
+            .sorted(Comparator.comparing(AbilityDefinition::passive)
+                    .thenComparingInt(AbilityDefinition::unlockLevel)
+                    .thenComparing(AbilityDefinition::title))
+            .toList();
 
     int colCount = 4;
     int btnWidth = (width - 20) / colCount - 4;

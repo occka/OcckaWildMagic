@@ -199,6 +199,12 @@ case "bard_greater_invisibility" -> BardAbilities.useBardGreaterInvisibility(pla
 case "warlock_mystic_charge" -> wildmagic.server.ability.WarlockAbilities.useMysticCharge(player);
 case "warlock_armor_of_agathys" -> wildmagic.server.ability.WarlockAbilities.useArmorOfAgathys(player);
 case "warlock_poison_spray" -> wildmagic.server.ability.WarlockAbilities.usePoisonSpray(player);
+case "warlock_pact_blade" -> wildmagic.server.ability.WarlockAbilities.usePactBlade(player);
+case "warlock_darkness" -> wildmagic.server.ability.WarlockAbilities.useDarkness(player);
+case "warlock_vampiric_touch" -> wildmagic.server.ability.WarlockAbilities.useVampiricTouch(player);
+case "warlock_counterspell" -> wildmagic.server.ability.WarlockAbilities.useCounterspell(player);
+case "warlock_circle_of_death" -> wildmagic.server.ability.WarlockAbilities.useCircleOfDeath(player);
+case "warlock_create_undead" -> wildmagic.server.ability.WarlockAbilities.useCreateUndead(player);
 case "wizard_fire_bolt" -> wildmagic.server.ability.WizardAbilities.useFireBolt(player);
 case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(player);
 			default -> usePlaceholderAbility(player, ability);
@@ -236,6 +242,30 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 
 	public static void onPlayerDamaged(ServerPlayer player, LivingEntity attacker, ServerLevel level) {
 		wildmagic.server.ability.WarlockAbilities.onPlayerDamaged(player, attacker, level);
+	}
+
+	public static void applyWarlockUndeadTouch(ServerPlayer attacker, LivingEntity target) {
+		wildmagic.server.ability.WarlockAbilities.applyUndeadTouch(attacker, target);
+	}
+
+	public static boolean isFriendlySummonedUndead(LivingEntity attacker, LivingEntity target) {
+		return wildmagic.server.ability.WarlockAbilities.isSummonedUndeadFriendly(attacker, target);
+	}
+
+	public static void drainManaAndClearSpellEffects(ServerPlayer player) {
+		PlayerClassData current = get(player);
+		if (current.hasClass() && current.maxMana() > 0) {
+			PLAYER_DATA.put(player.getUUID(), current.withMana(0));
+		}
+
+		WildMagicZones.clearPlayer(player);
+		BardAbilities.clearPlayer(player);
+		wildmagic.server.ability.WarlockAbilities.clearPlayer(player);
+		player.removeEffect(net.minecraft.world.effect.MobEffects.ABSORPTION);
+		player.removeEffect(net.minecraft.world.effect.MobEffects.DARKNESS);
+		player.removeEffect(net.minecraft.world.effect.MobEffects.BLINDNESS);
+		player.removeEffect(net.minecraft.world.effect.MobEffects.WITHER);
+		sync(player);
 	}
 
 	private static boolean canCastInCurrentArmor(ServerPlayer player, PlayerClassData data, AbilityDefinition ability) {
@@ -401,6 +431,7 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 
 	private static void tickPlayers(MinecraftServer server) {
 		wildmagic.server.ability.WizardAbilities.tickProjectiles(server);
+		wildmagic.server.ability.WarlockAbilities.tick(server);
 		if (server.getTickCount() % 20 != 0) {
 			return;
 		}
@@ -411,7 +442,6 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
         BardAbilities.tickForceCage(server);
 BardAbilities.tickMordenkainenSword(server);
         BardAbilities.tickHypnoticPattern(server);
-        wildmagic.server.ability.WarlockAbilities.tickArmorOfAgathys(server);
 		WildMagicZones.tickInvisibility(server);
 		WildMagicZones.tickSilence(server);
 		WildMagicZones.tickCharmed(currentServer);
