@@ -58,6 +58,16 @@ private static final Identifier BARD_SWORD_REACH_ID = Identifier.fromNamespaceAn
 		ServerLifecycleEvents.SERVER_STARTED.register(WildMagicServerState::load);
 		ServerLifecycleEvents.SERVER_STOPPING.register(WildMagicServerState::save);
 		ServerTickEvents.END_SERVER_TICK.register(WildMagicServerState::tickPlayers);
+		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+			if (!world.isClientSide() && world.getBlockState(hitResult.getBlockPos()).is(net.minecraft.world.level.block.Blocks.ENCHANTING_TABLE)) {
+				PlayerClassData data = player instanceof ServerPlayer serverPlayer ? get(serverPlayer) : PlayerClassData.EMPTY;
+				if (!data.hasClass() || data.selectedClass() != WildMagicClass.WIZARD) {
+					player.sendSystemMessage(Component.literal("Только волшебник может использовать стол зачарований"));
+					return InteractionResult.FAIL;
+				}
+			}
+			return InteractionResult.PASS;
+		});
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			applyClassPassives(handler.player);
 			sync(handler.player);
@@ -147,12 +157,9 @@ private static final Identifier BARD_SWORD_REACH_ID = Identifier.fromNamespaceAn
 			return;
 		}
 
-                if (current.selectedClass() == WildMagicClass.BARD && ability.manaCost() > 0) {
-    if (getMaxArmorTier(player) == ArmorTier.HEAVY) {
-        player.sendSystemMessage(Component.literal("Тяжёлая броня мешает использовать заклинания"));
-        return;
-    }
-}
+		if (!canCastInCurrentArmor(player, current, ability)) {
+			return;
+		}
 
 		// проверяем тишину
 if (WildMagicZones.isInSilenceZone(player) && ability.manaCost() > 0) {
@@ -187,6 +194,8 @@ case "bard_dominate" -> BardAbilities.useBardDominate(player);
 case "bard_silence" -> BardAbilities.useBardSilence(player);
 case "bard_dimension_door" -> BardAbilities.useBardDimensionDoor(player);
 case "bard_greater_invisibility" -> BardAbilities.useBardGreaterInvisibility(player);
+case "warlock_mystic_charge" -> wildmagic.server.ability.WarlockAbilities.useMysticCharge(player);
+case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(player);
 			default -> usePlaceholderAbility(player, ability);
 		};
 		if (!used) {
@@ -195,7 +204,7 @@ case "bard_greater_invisibility" -> BardAbilities.useBardGreaterInvisibility(pla
 
 		PlayerClassData updated = get(player).consumeMana(ability.manaCost());
 		PLAYER_DATA.put(player.getUUID(), updated);
-		setCooldown(player, slot, ability.cooldownSeconds());
+		setCooldown(player, slot, ClassProgression.effectiveCooldownSeconds(ability, updated));
 		sync(player);
 	}
 
@@ -218,6 +227,26 @@ case "bard_greater_invisibility" -> BardAbilities.useBardGreaterInvisibility(pla
 
 	public static boolean isInSilenceZone(ServerPlayer player) {
 		return WildMagicZones.isInSilenceZone(player);
+	}
+
+	private static boolean canCastInCurrentArmor(ServerPlayer player, PlayerClassData data, AbilityDefinition ability) {
+		if (ability.passive()) {
+			return true;
+		}
+
+		ArmorTier maxArmor = getMaxArmorTier(player);
+		ArmorTier allowed = switch (data.selectedClass()) {
+			case WIZARD -> ArmorTier.LIGHT;
+			case WARLOCK, SORCERER, BARD -> ArmorTier.MEDIUM;
+			default -> ArmorTier.HEAVY;
+		};
+
+		if (maxArmor.ordinal() <= allowed.ordinal()) {
+			return true;
+		}
+
+		player.sendSystemMessage(Component.literal("Броня мешает использовать способность: максимум " + allowed.name().toLowerCase(java.util.Locale.ROOT)));
+		return false;
 	}
 
 	private static boolean hasEnoughMana(ServerPlayer player, PlayerClassData data, AbilityDefinition ability) {
@@ -353,7 +382,11 @@ case "bard_greater_invisibility" -> BardAbilities.useBardGreaterInvisibility(pla
 }
 
 	public static void sync(ServerPlayer player) {
-		WildMagicNetworking.sendClassData(player, get(player));
+		long[] cooldowns = new long[PlayerClassData.ACTIVE_SLOT_COUNT];
+		for (int slot = 0; slot < PlayerClassData.ACTIVE_SLOT_COUNT; slot++) {
+			cooldowns[slot] = remainingCooldownTicks(player, slot);
+		}
+		WildMagicNetworking.sendClassData(player, get(player), cooldowns);
 	}
 
 	private static void tickPlayers(MinecraftServer server) {
@@ -457,12 +490,19 @@ public static ArmorTier getMaxArmorTier(ServerPlayer player) {
     PlayerClassData data = get(player);
     if (data.hasClass() && data.selectedClass() == WildMagicClass.BARD) {
         applyBardHealthPenalty(player);
+        removeWizardHealthPenalty(player);
         if (data.level() >= 5) applyBardLightStep(player);
         else removeBardLightStep(player);
         if (data.level() >= 10) applyBardCollegeOfSwords(player, data);
         else removeBardCollegeOfSwords(player);
+    } else if (data.hasClass() && data.selectedClass() == WildMagicClass.WIZARD) {
+        removeBardHealthPenalty(player);
+        removeBardLightStep(player);
+        removeBardCollegeOfSwords(player);
+        applyWizardHealthPenalty(player);
     } else {
         removeBardHealthPenalty(player);
+        removeWizardHealthPenalty(player);
         removeBardLightStep(player);
         removeBardCollegeOfSwords(player);
     }
@@ -470,6 +510,7 @@ public static ArmorTier getMaxArmorTier(ServerPlayer player) {
 
 private static void removeClassPassives(ServerPlayer player) {
     removeBardHealthPenalty(player);
+    removeWizardHealthPenalty(player);
     removeBardLightStep(player);
     removeBardCollegeOfSwords(player);
 }
@@ -491,6 +532,25 @@ private static void removeClassPassives(ServerPlayer player) {
 		}
 
 		maxHealth.removeModifier(BARD_HEALTH_MODIFIER_ID);
+	}
+
+	private static void applyWizardHealthPenalty(ServerPlayer player) {
+		AttributeInstance maxHealth = player.getAttribute(Attributes.MAX_HEALTH);
+		if (maxHealth == null || maxHealth.getModifier(WIZARD_HEALTH_MODIFIER_ID) != null) {
+			return;
+		}
+
+		maxHealth.addPermanentModifier(new AttributeModifier(WIZARD_HEALTH_MODIFIER_ID, WIZARD_HEALTH_PENALTY, AttributeModifier.Operation.ADD_VALUE));
+		player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
+	}
+
+	private static void removeWizardHealthPenalty(ServerPlayer player) {
+		AttributeInstance maxHealth = player.getAttribute(Attributes.MAX_HEALTH);
+		if (maxHealth == null || maxHealth.getModifier(WIZARD_HEALTH_MODIFIER_ID) == null) {
+			return;
+		}
+
+		maxHealth.removeModifier(WIZARD_HEALTH_MODIFIER_ID);
 	}
 
 	private static void load(MinecraftServer server) {

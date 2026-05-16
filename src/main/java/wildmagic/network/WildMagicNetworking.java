@@ -40,7 +40,16 @@ public final class WildMagicNetworking {
 	}
 
 	public static void sendClassData(ServerPlayer player, PlayerClassData data) {
-		ServerPlayNetworking.send(player, new SyncClassDataS2CPayload(data.serialize()));
+		sendClassData(player, data, new long[PlayerClassData.ACTIVE_SLOT_COUNT]);
+	}
+
+	public static void sendClassData(ServerPlayer player, PlayerClassData data, long[] cooldownTicks) {
+		StringBuilder serialized = new StringBuilder(data.serialize());
+		for (int slot = 0; slot < PlayerClassData.ACTIVE_SLOT_COUNT; slot++) {
+			long ticks = cooldownTicks != null && slot < cooldownTicks.length ? Math.max(0L, cooldownTicks[slot]) : 0L;
+			serialized.append(';').append(ticks);
+		}
+		ServerPlayNetworking.send(player, new SyncClassDataS2CPayload(serialized.toString()));
 	}
 
 	private static Identifier id(String path) {
