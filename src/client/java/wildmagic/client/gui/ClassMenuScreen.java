@@ -163,11 +163,12 @@ drawCentered(graphics, Component.literal("[П] — пассивка, работ�
 
 	private String abilityResourceText(PlayerClassData data, AbilityDefinition ability) {
 		int cooldown = ClassProgression.effectiveCooldownSeconds(ability, data);
-		if (!data.selectedClass().usesMana() || ability.manaCost() <= 0) {
+		int manaCost = ClassProgression.effectiveManaCost(ability, data);
+		if (!data.selectedClass().usesMana() || manaCost <= 0) {
 			return cooldown > 0 ? "КД " + cooldown + "с" : "без КД";
 		}
 
-		return ability.manaCost() + " маны" + (cooldown > 0 ? ", КД " + cooldown + "с" : "");
+		return manaCost + " маны" + (cooldown > 0 ? ", КД " + cooldown + "с" : "");
 	}
 
 	private String abilityTitle(WildMagicClass clazz, String abilityId) {

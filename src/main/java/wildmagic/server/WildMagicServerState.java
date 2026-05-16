@@ -95,6 +95,7 @@ private static final Identifier BARD_SWORD_REACH_ID = Identifier.fromNamespaceAn
 		ABILITY_COOLDOWNS.remove(player.getUUID());
 		WildMagicZones.clearPlayer(player);
 		BardAbilities.clearPlayer(player);
+		wildmagic.server.ability.WarlockAbilities.clearPlayer(player);
 
 		applyClassPassives(player);
 		sync(player);
@@ -106,6 +107,7 @@ private static final Identifier BARD_SWORD_REACH_ID = Identifier.fromNamespaceAn
 		ABILITY_COOLDOWNS.remove(player.getUUID());
 		WildMagicZones.clearPlayer(player);
 		BardAbilities.clearPlayer(player);
+		wildmagic.server.ability.WarlockAbilities.clearPlayer(player);
 
 		removeClassPassives(player);
 		sync(player);
@@ -195,6 +197,9 @@ case "bard_silence" -> BardAbilities.useBardSilence(player);
 case "bard_dimension_door" -> BardAbilities.useBardDimensionDoor(player);
 case "bard_greater_invisibility" -> BardAbilities.useBardGreaterInvisibility(player);
 case "warlock_mystic_charge" -> wildmagic.server.ability.WarlockAbilities.useMysticCharge(player);
+case "warlock_armor_of_agathys" -> wildmagic.server.ability.WarlockAbilities.useArmorOfAgathys(player);
+case "warlock_poison_spray" -> wildmagic.server.ability.WarlockAbilities.usePoisonSpray(player);
+case "wizard_fire_bolt" -> wildmagic.server.ability.WizardAbilities.useFireBolt(player);
 case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(player);
 			default -> usePlaceholderAbility(player, ability);
 		};
@@ -202,7 +207,7 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 			return;
 		}
 
-		PlayerClassData updated = get(player).consumeMana(ability.manaCost());
+		PlayerClassData updated = get(player).consumeMana(ClassProgression.effectiveManaCost(ability, current));
 		PLAYER_DATA.put(player.getUUID(), updated);
 		setCooldown(player, slot, ClassProgression.effectiveCooldownSeconds(ability, updated));
 		sync(player);
@@ -229,6 +234,10 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 		return WildMagicZones.isInSilenceZone(player);
 	}
 
+	public static void onPlayerDamaged(ServerPlayer player, LivingEntity attacker, ServerLevel level) {
+		wildmagic.server.ability.WarlockAbilities.onPlayerDamaged(player, attacker, level);
+	}
+
 	private static boolean canCastInCurrentArmor(ServerPlayer player, PlayerClassData data, AbilityDefinition ability) {
 		if (ability.passive()) {
 			return true;
@@ -250,15 +259,16 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 	}
 
 	private static boolean hasEnoughMana(ServerPlayer player, PlayerClassData data, AbilityDefinition ability) {
-		if (ability.manaCost() <= 0 || !data.selectedClass().usesMana()) {
+		int manaCost = ClassProgression.effectiveManaCost(ability, data);
+		if (manaCost <= 0 || !data.selectedClass().usesMana()) {
 			return true;
 		}
 
-		if (data.mana() >= ability.manaCost()) {
+		if (data.mana() >= manaCost) {
 			return true;
 		}
 
-		player.sendSystemMessage(Component.literal("Недостаточно маны: нужно " + ability.manaCost()));
+		player.sendSystemMessage(Component.literal("Недостаточно маны: нужно " + manaCost));
 		return false;
 	}
 
@@ -390,6 +400,7 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 	}
 
 	private static void tickPlayers(MinecraftServer server) {
+		wildmagic.server.ability.WizardAbilities.tickProjectiles(server);
 		if (server.getTickCount() % 20 != 0) {
 			return;
 		}
@@ -400,6 +411,7 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
         BardAbilities.tickForceCage(server);
 BardAbilities.tickMordenkainenSword(server);
         BardAbilities.tickHypnoticPattern(server);
+        wildmagic.server.ability.WarlockAbilities.tickArmorOfAgathys(server);
 		WildMagicZones.tickInvisibility(server);
 		WildMagicZones.tickSilence(server);
 		WildMagicZones.tickCharmed(currentServer);

@@ -8,7 +8,8 @@ public final class WizardAbilities {
 
 	public static List<AbilityDefinition> create() {
 		return List.of(
-				new AbilityDefinition("wizard_fireball", "Фаербол", "Огненный взрыв: 4-22 урона огнём и поджигание области радиусом 4 блока.", 5, 8, 60),
+				new AbilityDefinition("wizard_fire_bolt", "Огненный снаряд", "Маленький огненный снаряд: 1-10 урона, с 6 ур. 2-12, с 10 ур. 5-20.", 1, 0, 20),
+				new AbilityDefinition("wizard_fireball", "Фаербол", "Огненный снаряд-взрыв: 4-22 урона огнём и поджигание области радиусом 4 блока.", 5, 0, 60),
 				new AbilityDefinition("wizard_fragile_scholar", "Хрупкий учёный", "Пассивка: у волшебника всего 4 сердца, он не кастует в броне выше light, зато только он использует стол зачарований.", 1, 0, 0, true),
 				new AbilityDefinition("bard_sound_wave", "Звуковая волна", "Волна 3x3 летит на 6 блоков, наносит 4-10 урона и отталкивает цели.", 2, 0, 50),
 				new AbilityDefinition("bard_invisibility", "Невидимость", "Заклинатель становится невидимым на 60с. Прерывается при атаке или касте.", 3, 0, 120),

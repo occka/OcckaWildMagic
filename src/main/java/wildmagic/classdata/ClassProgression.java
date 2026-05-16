@@ -65,6 +65,24 @@ public static int expRequiredForNextLevel(int currentLevel) {
 		return ability.cooldownSeconds();
 	}
 
+	public static int effectiveManaCost(AbilityDefinition ability, PlayerClassData data) {
+		if (ability == null || data == null) {
+			return 0;
+		}
+
+		if ("warlock_armor_of_agathys".equals(ability.id())) {
+			if (data.level() >= 10) {
+				return 110;
+			}
+
+			if (data.level() >= 6) {
+				return 90;
+			}
+		}
+
+		return ability.manaCost();
+	}
+
 	private static List<AbilityDefinition> createStarterAbilities(WildMagicClass clazz) {
 		if (clazz == WildMagicClass.BARD) {
 			return List.of(

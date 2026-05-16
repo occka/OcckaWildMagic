@@ -134,10 +134,11 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 		return wildmagic.classdata.ClassProgression.abilityFor(data.selectedClass(), abilityId)
 				.map(ability -> {
 					int cooldown = wildmagic.classdata.ClassProgression.effectiveCooldownSeconds(ability, data);
-					if (!data.selectedClass().usesMana() || ability.manaCost() <= 0) {
+					int manaCost = wildmagic.classdata.ClassProgression.effectiveManaCost(ability, data);
+					if (!data.selectedClass().usesMana() || manaCost <= 0) {
 						return cooldown > 0 ? cooldown + "s" : "OK";
 					}
-					return ability.manaCost() + "M";
+					return manaCost + "M";
 				})
 				.orElse("?");
 	}

@@ -8,7 +8,9 @@ public final class WarlockAbilities {
 
 	public static List<AbilityDefinition> create() {
 		return List.of(
-				new AbilityDefinition("warlock_mystic_charge", "Мистический заряд", "Красный луч без маны: 2-8 маг. урона, КД 3с. С 6 ур. отталкивает на 5 блоков, с 10 ур. урон 5-12 и КД 2с.", 1, 3, 0),
+				new AbilityDefinition("warlock_mystic_charge", "Мистический заряд", "Красный луч без маны: 2-8 маг. урона, КД 3с. С 6 ур. слегка отталкивает, с 10 ур. урон 5-12 и КД 2с.", 1, 3, 0),
+				new AbilityDefinition("warlock_armor_of_agathys", "Доспех Агатиса", "На 1 минуту даёт 5 золотых HP и один раз отвечает атакующему 5 физ. уроном. На 6/10 ур.: 10/15 HP и урона, цена 90/110 маны.", 1, 0, 70),
+				new AbilityDefinition("warlock_poison_spray", "Ядовитые брызги", "Конус зелёных брызг до 5 блоков: отравление 10с и 5 физ. урона всем задетым.", 1, 0, 40),
 				new AbilityDefinition("bard_sound_wave", "Звуковая волна", "Волна 3x3 летит на 6 блоков, наносит 4-10 урона и отталкивает цели.", 2, 0, 50),
 				new AbilityDefinition("bard_misty_step", "Туманный шаг", "Телепорт вперёд до 25 блоков, не сквозь стены.", 4, 0, 25),
 				new AbilityDefinition("bard_silence", "Тишина", "Сфера радиусом 5 блоков: внутри нельзя использовать заклинания.", 4, 0, 120),
