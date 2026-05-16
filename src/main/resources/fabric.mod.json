@@ -22,9 +22,10 @@
 			"wildmagic.client.OcckaWildMagicClient"
 		]
 	},
-	"mixins": [
-		"occkawildmagic.mixins.json"
-	],
+"mixins": [
+    "occkawildmagic.mixins.json",
+    "occkawildmagic.client.mixins.json"
+],
 	"depends": {
 		"fabricloader": ">=0.19.2",
 		"minecraft": "~26.1",

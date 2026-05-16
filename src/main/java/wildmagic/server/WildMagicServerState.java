@@ -47,6 +47,7 @@ public final class WildMagicServerState {
 private static final Map<UUID, Long> INVISIBLE_PLAYERS = new ConcurrentHashMap<>();
 private static final net.minecraft.resources.Identifier HEROISM_DAMAGE_MODIFIER_ID = 
     net.minecraft.resources.Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "heroism_damage");
+	private static final Map<UUID, double[]> SILENCE_ZONES = new ConcurrentHashMap<>();
 	private static MinecraftServer currentServer;
 	private static Path saveFile;
 
@@ -140,6 +141,12 @@ INVISIBLE_PLAYERS.remove(player.getUUID());
 			return;
 		}
 
+		// проверяем тишину
+if (isInSilenceZone(player) && ability.manaCost() > 0) {
+    player.sendSystemMessage(Component.literal("Тишина: заклинания недоступны"));
+    return;
+}
+
 				// прерываем невидимость при касте любого заклинания кроме самой невидимости
 if (!ability.id().equals("bard_invisibility")) {
     breakInvisibility(player);
@@ -152,6 +159,8 @@ case "bard_sound_wave" -> useBardSoundWave(player);
 case "bard_charm" -> useBardCharm(player);
 case "bard_heroism" -> useBardHeroism(player);
 case "bard_invisibility" -> useBardInvisibility(player);
+case "bard_misty_step" -> useBardMistyStep(player);
+case "bard_silence" -> useBardSilence(player);
 			default -> usePlaceholderAbility(player, ability);
 		};
 		if (!used) {
@@ -237,7 +246,7 @@ case "bard_invisibility" -> useBardInvisibility(player);
 	}
 
 	private static boolean useBardInvisibility(ServerPlayer player) {
-    INVISIBLE_PLAYERS.put(player.getUUID(), player.level().getGameTime() + 60 * 20L);
+    INVISIBLE_PLAYERS.put(player.getUUID(), player.level().getGameTime() + 30 * 20L);
     player.setInvisible(true);
 
     player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
@@ -323,6 +332,30 @@ private static void removeHeroism(ServerPlayer player) {
     }
 }
 
+
+public static boolean isInSilenceZone(ServerPlayer player) {
+    Vec3 pos = player.position();
+    long now = player.level().getGameTime();
+    return SILENCE_ZONES.values().stream().anyMatch(zone ->
+            now <= zone[3] &&
+            pos.distanceTo(new Vec3(zone[0], zone[1], zone[2])) <= 5.0D);
+}
+
+private static void tickSilence(MinecraftServer server) {
+    if (server.getTickCount() % 20 != 0) return;
+    long now = server.overworld().getGameTime();
+
+    SILENCE_ZONES.entrySet().removeIf(entry -> now > entry.getValue()[3]);
+
+    // тиковые партиклы внутри активных зон
+    for (double[] zone : SILENCE_ZONES.values()) {
+        ServerLevel level = server.overworld();
+        level.sendParticles(ParticleTypes.SCULK_CHARGE_POP,
+                zone[0], zone[1] + 1.0D, zone[2],
+                8, 2.0D, 2.0D, 2.0D, 0.02D);
+    }
+}
+
 	private static boolean useBardSoundWave(ServerPlayer player) {
     ServerLevel level = player.level();
     Vec3 look = player.getLookAngle().normalize();
@@ -360,6 +393,95 @@ private static void removeHeroism(ServerPlayer player) {
             0.8F, 1.4F);
 
     return true;
+}
+
+private static boolean useBardMistyStep(ServerPlayer player) {
+    ServerLevel level = player.level();
+    Vec3 start = player.getEyePosition();
+    Vec3 look = player.getLookAngle().normalize();
+
+    // ищем точку телепорта — идём по лучу пока не упрёмся в блок
+    Vec3 target = start;
+    for (int i = 1; i <= 25; i++) {
+        Vec3 step = start.add(look.scale(i));
+        net.minecraft.world.level.ClipContext clip = new net.minecraft.world.level.ClipContext(
+                start, step,
+                net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                net.minecraft.world.level.ClipContext.Fluid.NONE,
+                player);
+        net.minecraft.world.phys.BlockHitResult hit = level.clip(clip);
+        if (hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            // упёрлись в стену — телепортируемся на шаг назад
+            target = start.add(look.scale(Math.max(1, i - 1)));
+            break;
+        }
+        target = step;
+    }
+
+    // партиклы на старте
+    level.sendParticles(ParticleTypes.POOF,
+            player.getX(), player.getY() + 1.0D, player.getZ(),
+            12, 0.3D, 0.5D, 0.3D, 0.05D);
+
+    player.teleportTo(target.x, target.y - 1.0D, target.z);
+
+    // партиклы на финише
+    level.sendParticles(ParticleTypes.POOF,
+            target.x, target.y, target.z,
+            12, 0.3D, 0.5D, 0.3D, 0.05D);
+    level.playSound(null, target.x, target.y, target.z,
+            net.minecraft.sounds.SoundEvents.CHORUS_FRUIT_TELEPORT,
+            net.minecraft.sounds.SoundSource.PLAYERS,
+            0.6F, 1.8F);
+
+    return true;
+}
+
+private static boolean useBardSilence(ServerPlayer player) {
+    ServerLevel level = player.level();
+    Vec3 target = raycastBlock(player, 20.0D);
+
+    SILENCE_ZONES.put(java.util.UUID.randomUUID(), new double[]{
+            target.x, target.y, target.z,
+            level.getGameTime() + 15 * 20L
+    });
+
+    // кольцо партиклов на земле
+    for (int i = 0; i < 32; i++) {
+        double angle = i / 32.0D * 2 * Math.PI;
+        double radius = 5.0D;
+        level.sendParticles(ParticleTypes.SCULK_SOUL,
+                target.x + Math.cos(angle) * radius,
+                target.y + 0.1D,
+                target.z + Math.sin(angle) * radius,
+                1, 0.0D, 0.0D, 0.0D, 0.0D);
+    }
+
+    // партиклы внутри сферы
+    level.sendParticles(ParticleTypes.SCULK_CHARGE_POP,
+            target.x, target.y + 2.5D, target.z,
+            20, 2.0D, 2.0D, 2.0D, 0.05D);
+
+    level.playSound(null, target.x, target.y, target.z,
+            net.minecraft.sounds.SoundEvents.SCULK_SHRIEKER_SHRIEK,
+            net.minecraft.sounds.SoundSource.PLAYERS,
+            0.5F, 1.8F);
+
+    return true;
+}
+
+private static Vec3 raycastBlock(ServerPlayer player, double range) {
+    net.minecraft.world.level.ClipContext clip = new net.minecraft.world.level.ClipContext(
+            player.getEyePosition(),
+            player.getEyePosition().add(player.getLookAngle().normalize().scale(range)),
+            net.minecraft.world.level.ClipContext.Block.COLLIDER,
+            net.minecraft.world.level.ClipContext.Fluid.NONE,
+            player);
+    net.minecraft.world.phys.BlockHitResult hit = player.level().clip(clip);
+    if (hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+        return Vec3.atCenterOf(hit.getBlockPos());
+    }
+    return player.getEyePosition().add(player.getLookAngle().normalize().scale(range));
 }
 
 	private static boolean usePlaceholderAbility(ServerPlayer player, AbilityDefinition ability) {
@@ -423,6 +545,7 @@ private static void removeHeroism(ServerPlayer player) {
 		}
 		tickHeroism(server);
 		tickInvisibility(server);
+		tickSilence(server);
 
 		CHARMED_TARGETS.forEach((playerUuid, targets) ->
     targets.entrySet().removeIf(entry -> {
@@ -450,6 +573,13 @@ private static void removeHeroism(ServerPlayer player) {
 		PLAYER_DATA.put(player.getUUID(), updated);
 		sync(player);
 	}
+
+	public static void fillMana(ServerPlayer player) {
+    PlayerClassData current = get(player);
+    if (!current.hasClass() || !current.selectedClass().usesMana()) return;
+    PLAYER_DATA.put(player.getUUID(), current.withMana(current.maxMana()));
+    sync(player);
+}
 
 	private static void tickHeroism(MinecraftServer server) {
     // раз в секунду

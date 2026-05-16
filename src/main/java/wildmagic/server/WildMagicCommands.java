@@ -28,22 +28,35 @@ public final class WildMagicCommands {
 	}
 
 	public static void register() {
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(Commands.literal("wildmagic")
-				.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_MODERATOR))
-				.then(Commands.literal("class")
-						.then(Commands.literal("set")
-								.then(Commands.argument("targets", EntityArgument.players())
-										.then(Commands.argument("class", StringArgumentType.word())
-												.suggests(CLASS_SUGGESTIONS)
-												.executes(context -> setClass(context, ClassProgression.MIN_LEVEL))
-												.then(Commands.argument("level", IntegerArgumentType.integer(ClassProgression.MIN_LEVEL, ClassProgression.MAX_LEVEL))
-														.executes(context -> setClass(context, IntegerArgumentType.getInteger(context, "level"))))
-												.then(Commands.literal("max")
-														.executes(context -> setClass(context, ClassProgression.MAX_LEVEL))))))
-						.then(Commands.literal("clear")
-								.then(Commands.argument("targets", EntityArgument.players())
-										.executes(WildMagicCommands::clearClass))))));
-	}
+    CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(Commands.literal("wildmagic")
+            .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_MODERATOR))
+            .then(Commands.literal("class")
+                    .then(Commands.literal("set")
+                            .then(Commands.argument("targets", EntityArgument.players())
+                                    .then(Commands.argument("class", StringArgumentType.word())
+                                            .suggests(CLASS_SUGGESTIONS)
+                                            .executes(context -> setClass(context, ClassProgression.MIN_LEVEL))
+                                            .then(Commands.argument("level", IntegerArgumentType.integer(ClassProgression.MIN_LEVEL, ClassProgression.MAX_LEVEL))
+                                                    .executes(context -> setClass(context, IntegerArgumentType.getInteger(context, "level"))))
+                                            .then(Commands.literal("max")
+                                                    .executes(context -> setClass(context, ClassProgression.MAX_LEVEL))))))
+                    .then(Commands.literal("clear")
+                            .then(Commands.argument("targets", EntityArgument.players())
+                                    .executes(WildMagicCommands::clearClass))))
+            .then(Commands.literal("mana")
+                    .then(Commands.literal("fill")
+                            .then(Commands.argument("targets", EntityArgument.players())
+                                    .executes(WildMagicCommands::fillMana))))));
+}
+
+	private static int fillMana(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+    Collection<ServerPlayer> targets = EntityArgument.getPlayers(context, "targets");
+    for (ServerPlayer player : targets) {
+        WildMagicServerState.fillMana(player);
+    }
+    context.getSource().sendSuccess(() -> Component.literal("Мана заполнена игрокам: " + targets.size()), true);
+    return targets.size();
+}
 
 	private static int setClass(CommandContext<CommandSourceStack> context, int level) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
 		String classId = StringArgumentType.getString(context, "class").toLowerCase(Locale.ROOT);
