@@ -130,7 +130,6 @@ public class ClassMenuScreen extends Screen {
 		} else {
 			drawCentered(graphics, Component.literal("До уровня " + (data.level() + 1) + ": " + data.exp() + " / " + data.expRequiredForNextLevel() + " class exp"), width / 2, barY + 10, 0xFFFFFFFF);
 		}
-		graphics.text(font, Component.literal("1 достижение = 1 class exp. Заданий для апа уровня больше нет."), width / 2 - 150, barY + 24, 0xFFC8C8C8, true);
 		if (clazz.usesMana()) {
 			graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
 		}
