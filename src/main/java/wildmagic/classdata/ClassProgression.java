@@ -35,6 +35,7 @@ public static int expRequiredForNextLevel(int currentLevel) {
     if (clazz == null || !clazz.usesMana()) return 0;
     return switch (clazz) {
         case BARD -> 2;
+        case WARLOCK -> 3;
         default -> 5;
     };
 }
@@ -59,7 +60,7 @@ public static int expRequiredForNextLevel(int currentLevel) {
 		}
 
 		if ("warlock_mystic_charge".equals(ability.id()) && data.level() >= 10) {
-			return 2;
+			return 4;
 		}
 
 		return ability.cooldownSeconds();

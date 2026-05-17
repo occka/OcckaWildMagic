@@ -46,6 +46,7 @@ public final class WarlockAbilities {
 	private static final Map<UUID, Long> PACT_BLADE_OWNERS = new ConcurrentHashMap<>();
 	private static final Map<UUID, DarknessZone> DARKNESS_ZONES = new ConcurrentHashMap<>();
 	private static final Map<UUID, DeathCircle> DEATH_CIRCLES = new ConcurrentHashMap<>();
+	private static final Map<UUID, DeathRitual> DEATH_RITUALS = new ConcurrentHashMap<>();
 	private static final Map<UUID, UUID> SUMMONED_UNDEAD = new ConcurrentHashMap<>();
 	private static final ThreadLocal<Boolean> REFLECTING_AGATHYS = ThreadLocal.withInitial(() -> false);
 
@@ -176,7 +177,7 @@ public final class WarlockAbilities {
 		}
 
 		target.hurtServer(player.level(), player.damageSources().playerAttack(player), 8.0F);
-		player.heal(8.0F);
+		player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + 8.0F));
 		player.level().sendParticles(ParticleTypes.DAMAGE_INDICATOR, target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(), 8, 0.2D, 0.3D, 0.2D, 0.02D);
 		player.level().sendParticles(ParticleTypes.HEART, player.getX(), player.getY() + 1.0D, player.getZ(), 6, 0.3D, 0.5D, 0.3D, 0.03D);
 		player.level().playSound(null, target.getX(), target.getY(), target.getZ(),
@@ -220,6 +221,7 @@ public final class WarlockAbilities {
 		if (skeleton != null) {
 			skeleton.setPos(base.x, base.y, base.z + 1.0D);
 			skeleton.setPersistenceRequired();
+			skeleton.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
 			level.addFreshEntity(skeleton);
 			SUMMONED_UNDEAD.put(skeleton.getUUID(), player.getUUID());
 		}
@@ -228,6 +230,69 @@ public final class WarlockAbilities {
 				net.minecraft.sounds.SoundEvents.ZOMBIE_VILLAGER_CURE,
 				net.minecraft.sounds.SoundSource.PLAYERS,
 				0.8F, 0.6F);
+		return true;
+	}
+
+	public static boolean useFingerOfDeath(ServerPlayer player) {
+		LivingEntity target = BardAbilities.raycastLivingEntity(player, 25.0D);
+		if (target == null) {
+			return false;
+		}
+
+		ServerLevel level = player.level();
+		drawBeam(level, player.getEyePosition(), target.getEyePosition(), BeamColor.GREEN);
+		float damage = 2.0F + player.getRandom().nextFloat() * 16.0F;
+		target.hurtServer(level, player.damageSources().magic(), damage);
+		level.playSound(null, target.getX(), target.getY(), target.getZ(),
+				net.minecraft.sounds.SoundEvents.SOUL_ESCAPE.value(),
+				net.minecraft.sounds.SoundSource.PLAYERS,
+				1.0F, 0.7F);
+		if (!target.isAlive()) {
+			spawnRandomUndead(level, player, target.position());
+		}
+		return true;
+	}
+
+	public static boolean useBreakthrough(ServerPlayer player) {
+		LivingEntity target = BardAbilities.raycastLivingEntity(player, 30.0D);
+		if (target == null) {
+			return false;
+		}
+
+		ServerLevel level = player.level();
+		drawBeam(level, player.getEyePosition(), target.getEyePosition(), BeamColor.PINK);
+		float damage = 2.0F + player.getRandom().nextFloat() * 14.0F;
+		player.hurtServer(level, player.damageSources().generic(), damage);
+		if (!player.isAlive()) {
+			return true;
+		}
+
+		Vec3 behindTarget = target.position().subtract(player.getLookAngle().normalize().scale(0.8D));
+		player.teleportTo(behindTarget.x, behindTarget.y, behindTarget.z);
+		target.hurtServer(level, player.damageSources().magic(), damage);
+		target.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 8 * 20, 0), player);
+		target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 8 * 20, 0), player);
+		level.sendParticles(ParticleTypes.PORTAL, target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(), 40, 0.4D, 0.8D, 0.4D, 0.08D);
+		level.playSound(null, target.getX(), target.getY(), target.getZ(),
+				net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT,
+				net.minecraft.sounds.SoundSource.PLAYERS,
+				1.0F, 0.55F);
+		return true;
+	}
+
+	public static boolean usePowerWordDeath(ServerPlayer player) {
+		LivingEntity target = BardAbilities.raycastLivingEntity(player, 15.0D);
+		if (target == null) {
+			return false;
+		}
+
+		ServerLevel level = player.level();
+		drawBeam(level, player.getEyePosition(), target.getEyePosition(), BeamColor.GREEN);
+		DEATH_RITUALS.put(target.getUUID(), new DeathRitual(player.getUUID(), target.getUUID(), target.position(), level.getGameTime() + 5 * 20L));
+		level.playSound(null, target.getX(), target.getY(), target.getZ(),
+				net.minecraft.sounds.SoundEvents.TRIAL_SPAWNER_OMINOUS_ACTIVATE,
+				net.minecraft.sounds.SoundSource.PLAYERS,
+				1.2F, 0.65F);
 		return true;
 	}
 
@@ -268,7 +333,9 @@ public final class WarlockAbilities {
 		tickArmorOfAgathys(server);
 		tickDarknessZones(server);
 		tickDeathCircles(server);
+		tickDeathRituals(server);
 		tickSummonedUndead(server);
+		tickDeadOneMobPacification(server);
 	}
 
 	public static void tickArmorOfAgathys(MinecraftServer server) {
@@ -292,6 +359,7 @@ public final class WarlockAbilities {
 		removePactBladeFromInventory(player);
 		DARKNESS_ZONES.entrySet().removeIf(entry -> entry.getValue().casterId().equals(player.getUUID()));
 		DEATH_CIRCLES.entrySet().removeIf(entry -> entry.getValue().casterId().equals(player.getUUID()));
+		DEATH_RITUALS.entrySet().removeIf(entry -> entry.getValue().casterId().equals(player.getUUID()) || entry.getValue().targetId().equals(player.getUUID()));
 		SUMMONED_UNDEAD.entrySet().removeIf(entry -> entry.getValue().equals(player.getUUID()));
 	}
 
@@ -317,7 +385,7 @@ public final class WarlockAbilities {
 			return;
 		}
 
-		target.addEffect(new MobEffectInstance(MobEffects.WITHER, 2 * 20, 0), attacker);
+		target.addEffect(new MobEffectInstance(MobEffects.WITHER, 4 * 20, 0), attacker);
 	}
 
 	private static void tickWarlockPassives(MinecraftServer server) {
@@ -326,11 +394,18 @@ public final class WarlockAbilities {
 				continue;
 			}
 
-			player.getFoodData().setFoodLevel(20);
-			player.getFoodData().setSaturation(Math.max(player.getFoodData().getSaturationLevel(), 5.0F));
+			player.removeEffect(MobEffects.HUNGER);
 			player.setAirSupply(player.getMaxAirSupply());
 			player.addEffect(new MobEffectInstance(MobEffects.WATER_BREATHING, 25 * 20, 0, false, false), player);
 			player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 25 * 20, 0, false, false), player);
+			if (dataLevel(player) >= 10) {
+				player.removeEffect(MobEffects.POISON);
+				player.removeEffect(MobEffects.WITHER);
+				player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 25 * 20, 0, false, false), player);
+				if (player.level().isBrightOutside() && player.level().canSeeSkyFromBelowWater(player.blockPosition())) {
+					player.igniteForSeconds(3.0F);
+				}
+			}
 		}
 	}
 
@@ -397,8 +472,51 @@ public final class WarlockAbilities {
 				if (caster != null && entity == caster) {
 					continue;
 				}
-				entity.addEffect(new MobEffectInstance(MobEffects.WITHER, 3 * 20, 0), caster);
+				entity.addEffect(new MobEffectInstance(MobEffects.WITHER, 5 * 20, 0), caster);
 				entity.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 10 * 20, 0), caster);
+			}
+		}
+	}
+
+	private static void tickDeathRituals(MinecraftServer server) {
+		long now = server.overworld().getGameTime();
+		DEATH_RITUALS.entrySet().removeIf(entry -> {
+			DeathRitual ritual = entry.getValue();
+			LivingEntity target = findLivingEntity(server, ritual.targetId());
+			ServerPlayer caster = server.getPlayerList().getPlayer(ritual.casterId());
+			if (target == null || !target.isAlive()) {
+				return true;
+			}
+
+			ServerLevel level = (ServerLevel) target.level();
+			Vec3 center = target.position();
+			drawRitualCircle(level, center);
+			target.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 30, 255, false, false), caster);
+			target.addEffect(new MobEffectInstance(MobEffects.MINING_FATIGUE, 30, 4, false, false), caster);
+			level.sendParticles(ParticleTypes.SOUL, center.x, center.y + target.getBbHeight() * 0.5D, center.z, 10, 0.7D, 0.8D, 0.7D, 0.05D);
+			if (now <= ritual.expireTime()) {
+				return false;
+			}
+
+			target.hurtServer(level, caster == null ? target.damageSources().magic() : caster.damageSources().magic(), 40.0F);
+			level.sendParticles(ParticleTypes.SCULK_SOUL, center.x, center.y + 0.8D, center.z, 64, 1.0D, 1.0D, 1.0D, 0.12D);
+			level.playSound(null, center.x, center.y, center.z,
+					net.minecraft.sounds.SoundEvents.WITHER_DEATH,
+					net.minecraft.sounds.SoundSource.PLAYERS,
+					1.0F, 0.8F);
+			return true;
+		});
+	}
+
+	private static void tickDeadOneMobPacification(MinecraftServer server) {
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			if (!isDeadOne(player)) {
+				continue;
+			}
+
+			AABB area = player.getBoundingBox().inflate(32.0D);
+			for (Mob mob : player.level().getEntitiesOfClass(Mob.class, area, mob -> mob.getTarget() == player)) {
+				mob.setTarget(null);
 			}
 		}
 	}
@@ -440,7 +558,25 @@ public final class WarlockAbilities {
 		if (entity == owner || SUMMONED_UNDEAD.containsKey(entity.getUUID())) {
 			return true;
 		}
-		return entity instanceof ServerPlayer player && isWarlock(player);
+		return entity instanceof ServerPlayer player && (isWarlock(player) || isDeadOne(player));
+	}
+
+	private static void spawnRandomUndead(ServerLevel level, ServerPlayer owner, Vec3 position) {
+		@SuppressWarnings("unchecked")
+		EntityType<? extends Mob>[] pool = new EntityType[]{
+				EntityType.ZOMBIE, EntityType.ZOMBIE_VILLAGER, EntityType.HUSK, EntityType.DROWNED, EntityType.ZOMBIFIED_PIGLIN,
+				EntityType.SKELETON, EntityType.STRAY, EntityType.WITHER_SKELETON, EntityType.BOGGED, EntityType.BLAZE
+		};
+		EntityType<? extends Mob> type = pool[owner.getRandom().nextInt(pool.length)];
+		Mob mob = type.create(level, EntitySpawnReason.MOB_SUMMONED);
+		if (mob == null) {
+			return;
+		}
+
+		mob.setPos(position.x, position.y, position.z);
+		mob.setPersistenceRequired();
+		level.addFreshEntity(mob);
+		SUMMONED_UNDEAD.put(mob.getUUID(), owner.getUUID());
 	}
 
 	private static void spawnZombie(ServerLevel level, ServerPlayer owner, Vec3 position) {
@@ -455,7 +591,6 @@ public final class WarlockAbilities {
 		zombie.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
 		zombie.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
 		zombie.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
-		zombie.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_AXE));
 		level.addFreshEntity(zombie);
 		SUMMONED_UNDEAD.put(zombie.getUUID(), owner.getUUID());
 	}
@@ -521,6 +656,17 @@ public final class WarlockAbilities {
 		return ownerId.toString().equals(data.copyTag().getStringOr(PACT_BLADE_OWNER_TAG, ""));
 	}
 
+	private static void drawRitualCircle(ServerLevel level, Vec3 center) {
+		for (int i = 0; i < 64; i++) {
+			double angle = i / 64.0D * Math.PI * 2.0D;
+			double radius = 1.8D;
+			level.sendParticles(ParticleTypes.HAPPY_VILLAGER, center.x + Math.cos(angle) * radius, center.y + 0.1D, center.z + Math.sin(angle) * radius, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+		}
+		for (double y = 0.2D; y <= 2.4D; y += 0.35D) {
+			level.sendParticles(ParticleTypes.WITCH, center.x, center.y + y, center.z, 3, 0.9D, 0.0D, 0.9D, 0.02D);
+		}
+	}
+
 	private static void drawDeathCircle(ServerLevel level, Vec3 center) {
 		for (int i = 0; i < 96; i++) {
 			double angle = i / 96.0D * Math.PI * 2.0D;
@@ -562,11 +708,28 @@ public final class WarlockAbilities {
 			Vec3 point = start.add(direction.scale(step));
 			if (color == BeamColor.PINK) {
 				level.sendParticles(ParticleTypes.WITCH, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+			} else if (color == BeamColor.GREEN) {
+				level.sendParticles(ParticleTypes.SOUL, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+				level.sendParticles(ParticleTypes.HAPPY_VILLAGER, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
 			} else {
 				level.sendParticles(ParticleTypes.FLAME, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
 				level.sendParticles(ParticleTypes.DRIPPING_LAVA, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
 			}
 		}
+	}
+
+	public static boolean isDeathRitualSilenced(ServerPlayer player) {
+		return DEATH_RITUALS.containsKey(player.getUUID());
+	}
+
+	public static boolean isDeadOne(ServerPlayer player) {
+		PlayerClassData data = WildMagicServerState.get(player);
+		return data.hasClass() && data.selectedClass() == WildMagicClass.WARLOCK && data.level() >= 10;
+	}
+
+	private static int dataLevel(ServerPlayer player) {
+		PlayerClassData data = WildMagicServerState.get(player);
+		return data.hasClass() && data.selectedClass() == WildMagicClass.WARLOCK ? data.level() : 0;
 	}
 
 	private static boolean isWarlock(ServerPlayer player) {
@@ -576,7 +739,8 @@ public final class WarlockAbilities {
 
 	private enum BeamColor {
 		RED,
-		PINK
+		PINK,
+		GREEN
 	}
 
 	private record AgathysState(long expireTime, float damage, boolean retaliated) {
@@ -589,5 +753,8 @@ public final class WarlockAbilities {
 	}
 
 	private record DeathCircle(UUID casterId, Vec3 center, long startTime, long expireTime) {
+	}
+
+	private record DeathRitual(UUID casterId, UUID targetId, Vec3 startCenter, long expireTime) {
 	}
 }

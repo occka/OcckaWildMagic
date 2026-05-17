@@ -6,6 +6,7 @@ import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import wildmagic.server.WildMagicServerState;
 
@@ -35,6 +36,24 @@ public class LivingEntityMixin {
     }
 
     @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
+    private void occkaWildMagic$checkDeadOneImmunities(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity)(Object)this;
+        if (!(self instanceof net.minecraft.server.level.ServerPlayer player)) return;
+        if (!WildMagicServerState.isDeadOne(player)) return;
+
+        String damageKey = source.typeHolder().unwrapKey()
+                .map(Object::toString)
+                .orElse("");
+        if (source.is(net.minecraft.world.damagesource.DamageTypes.FALL)
+                || source.is(net.minecraft.world.damagesource.DamageTypes.WITHER)
+                || damageKey.contains("poison")
+                || damageKey.contains("wither")
+                || source.getEntity() instanceof net.minecraft.world.entity.Mob) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
     private void occkaWildMagic$checkHeroismPoison(net.minecraft.server.level.ServerLevel level, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity)(Object)this;
         if (!(self instanceof net.minecraft.server.level.ServerPlayer player)) return;
@@ -46,6 +65,17 @@ public class LivingEntityMixin {
         if (damageKey.contains("poison") || damageKey.contains("wither")) {
             cir.setReturnValue(false);
         }
+    }
+
+    @Inject(method = "heal", at = @At("HEAD"), cancellable = true)
+    private void occkaWildMagic$warlockHealingHurts(float amount, CallbackInfo ci) {
+        if (amount <= 0.0F) return;
+        LivingEntity self = (LivingEntity)(Object)this;
+        if (!(self instanceof net.minecraft.server.level.ServerPlayer player)) return;
+        if (!WildMagicServerState.isWarlock(player)) return;
+
+        player.hurtServer(player.level(), player.damageSources().magic(), amount);
+        ci.cancel();
     }
 
     @Inject(method = "hurtServer", at = @At("HEAD"))

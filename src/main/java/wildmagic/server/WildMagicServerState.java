@@ -163,6 +163,11 @@ private static final Identifier BARD_SWORD_REACH_ID = Identifier.fromNamespaceAn
 			return;
 		}
 
+		if (wildmagic.server.ability.WarlockAbilities.isDeathRitualSilenced(player)) {
+			player.sendSystemMessage(Component.literal("Ритуал смерти: магия недоступна"));
+			return;
+		}
+
 		// проверяем тишину
 if (WildMagicZones.isInSilenceZone(player) && ability.manaCost() > 0) {
     player.sendSystemMessage(Component.literal("Тишина: заклинания недоступны"));
@@ -205,6 +210,9 @@ case "warlock_vampiric_touch" -> wildmagic.server.ability.WarlockAbilities.useVa
 case "warlock_counterspell" -> wildmagic.server.ability.WarlockAbilities.useCounterspell(player);
 case "warlock_circle_of_death" -> wildmagic.server.ability.WarlockAbilities.useCircleOfDeath(player);
 case "warlock_create_undead" -> wildmagic.server.ability.WarlockAbilities.useCreateUndead(player);
+case "warlock_finger_of_death" -> wildmagic.server.ability.WarlockAbilities.useFingerOfDeath(player);
+case "warlock_breakthrough" -> wildmagic.server.ability.WarlockAbilities.useBreakthrough(player);
+case "warlock_power_word_death" -> wildmagic.server.ability.WarlockAbilities.usePowerWordDeath(player);
 case "wizard_fire_bolt" -> wildmagic.server.ability.WizardAbilities.useFireBolt(player);
 case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(player);
 			default -> usePlaceholderAbility(player, ability);
@@ -250,6 +258,15 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 
 	public static boolean isFriendlySummonedUndead(LivingEntity attacker, LivingEntity target) {
 		return wildmagic.server.ability.WarlockAbilities.isSummonedUndeadFriendly(attacker, target);
+	}
+
+	public static boolean isDeadOne(ServerPlayer player) {
+		return wildmagic.server.ability.WarlockAbilities.isDeadOne(player);
+	}
+
+	public static boolean isWarlock(ServerPlayer player) {
+		PlayerClassData data = get(player);
+		return data.hasClass() && data.selectedClass() == WildMagicClass.WARLOCK;
 	}
 
 	public static void drainManaAndClearSpellEffects(ServerPlayer player) {
