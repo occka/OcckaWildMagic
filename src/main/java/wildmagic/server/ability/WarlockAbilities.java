@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Unit;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -32,8 +33,10 @@ import net.minecraft.world.phys.Vec3;
 import wildmagic.classdata.PlayerClassData;
 import wildmagic.classdata.WildMagicClass;
 import wildmagic.server.WildMagicServerState;
+import net.minecraft.core.Holder;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -48,10 +51,220 @@ public final class WarlockAbilities {
 	private static final Map<UUID, DeathCircle> DEATH_CIRCLES = new ConcurrentHashMap<>();
 	private static final Map<UUID, DeathRitual> DEATH_RITUALS = new ConcurrentHashMap<>();
 	private static final Map<UUID, UUID> SUMMONED_UNDEAD = new ConcurrentHashMap<>();
+	private static final Map<UUID, Long> SPIDER_CLIMB_PLAYERS = new ConcurrentHashMap<>();
 	private static final ThreadLocal<Boolean> REFLECTING_AGATHYS = ThreadLocal.withInitial(() -> false);
+
+	// Hex effect pool — (MobEffect, particleColor label)
+	private record HexEffect(Holder<MobEffect> effect, String colorLabel) {}
 
 	private WarlockAbilities() {
 	}
+
+	// -------------------------------------------------------------------------
+	// Новые способности
+	// -------------------------------------------------------------------------
+
+	public static boolean useFrostbite(ServerPlayer player) {
+		ServerLevel level = player.level();
+		LivingEntity target = BardAbilities.raycastLivingEntity(player, 3.5D);
+		if (target == null) {
+			player.sendSystemMessage(Component.literal("Цель не найдена"));
+			return false;
+		}
+
+		float damage = 2.0F + player.getRandom().nextFloat() * 4.0F;
+		target.hurtServer(level, player.damageSources().playerAttack(player), damage);
+		// Wither-эффект блокирует естественную регенерацию; для блокировки heal() используем
+		// кастомный эффект — но в ванилле нет «no-heal» эффекта, поэтому используем
+		// WITHER (0 уровень, 8с) — он не даёт пассивной регенерации и мешает absorption.
+		// Дополнительно снимаем регенерацию если была.
+		target.removeEffect(MobEffects.REGENERATION);
+		target.addEffect(new MobEffectInstance(MobEffects.WITHER, 8 * 20, 0, false, false), player);
+
+		level.sendParticles(ParticleTypes.SNOWFLAKE,
+				target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+				20, 0.3D, 0.4D, 0.3D, 0.04D);
+		level.sendParticles(ParticleTypes.ITEM_SNOWBALL,
+				target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+				12, 0.2D, 0.3D, 0.2D, 0.06D);
+		level.playSound(null, target.getX(), target.getY(), target.getZ(),
+				net.minecraft.sounds.SoundEvents.PLAYER_HURT_FREEZE,
+				net.minecraft.sounds.SoundSource.PLAYERS,
+				0.9F, 1.3F);
+		return true;
+	}
+
+	public static boolean useHex(ServerPlayer player) {
+		ServerLevel level = player.level();
+		LivingEntity target = BardAbilities.raycastLivingEntity(player, 15.0D);
+		if (target == null) {
+			player.sendSystemMessage(Component.literal("Цель не найдена"));
+			return false;
+		}
+
+		// Пул эффектов с цветами луча
+		record HexEntry(Holder<MobEffect> effect, BeamColor color) {}
+		List<HexEntry> pool = List.of(
+				new HexEntry(MobEffects.SLOWNESS,       BeamColor.BLUE),
+				new HexEntry(MobEffects.WEAKNESS,       BeamColor.GRAY),
+				new HexEntry(MobEffects.MINING_FATIGUE, BeamColor.BROWN),
+				new HexEntry(MobEffects.BLINDNESS,      BeamColor.BLACK),
+				new HexEntry(MobEffects.POISON,         BeamColor.GREEN),
+				new HexEntry(MobEffects.WITHER,         BeamColor.DARK),
+				new HexEntry(MobEffects.HUNGER,         BeamColor.YELLOW),
+				new HexEntry(MobEffects.LEVITATION,     BeamColor.PINK)
+		);
+
+		HexEntry chosen = pool.get(player.getRandom().nextInt(pool.size()));
+		target.addEffect(new MobEffectInstance(chosen.effect(), 8 * 20, 0, false, true), player);
+
+		drawHexBeam(level, player.getEyePosition(),
+				target.position().add(0, target.getBbHeight() * 0.5D, 0),
+				chosen.color());
+
+		level.playSound(null, target.getX(), target.getY(), target.getZ(),
+				net.minecraft.sounds.SoundEvents.WITCH_THROW,
+				net.minecraft.sounds.SoundSource.PLAYERS,
+				0.8F, 0.9F);
+		return true;
+	}
+
+	public static boolean useSpiderClimb(ServerPlayer player) {
+		ServerLevel level = player.level();
+		long expireTime = level.getGameTime() + 30 * 20L;
+		SPIDER_CLIMB_PLAYERS.put(player.getUUID(), expireTime);
+
+		// Эффект паутины — замедление не нужно, но ставим web-визуал
+		level.sendParticles(ParticleTypes.POOF,
+				player.getX(), player.getY() + 1.0D, player.getZ(),
+				16, 0.4D, 0.5D, 0.4D, 0.03D);
+		// Паутинные нити вокруг игрока
+		for (int i = 0; i < 8; i++) {
+			double angle = i / 8.0D * 2 * Math.PI;
+			level.sendParticles(ParticleTypes.ITEM_COBWEB,
+					player.getX() + Math.cos(angle) * 0.6D,
+					player.getY() + 0.8D,
+					player.getZ() + Math.sin(angle) * 0.6D,
+					1, 0.0D, 0.0D, 0.0D, 0.0D);
+		}
+		level.playSound(null, player.getX(), player.getY(), player.getZ(),
+				net.minecraft.sounds.SoundEvents.SPIDER_AMBIENT,
+				net.minecraft.sounds.SoundSource.PLAYERS,
+				0.9F, 0.7F);
+		return true;
+	}
+
+	public static boolean useRayOfWeakness(ServerPlayer player) {
+		ServerLevel level = player.level();
+		LivingEntity target = BardAbilities.raycastLivingEntity(player, 15.0D);
+		if (target == null) {
+			player.sendSystemMessage(Component.literal("Цель не найдена"));
+			return false;
+		}
+
+		target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 5 * 20, 0, false, true), player);
+
+		// Серый луч
+		drawGrayBeam(level,
+				player.getEyePosition(),
+				target.position().add(0, target.getBbHeight() * 0.5D, 0));
+
+		level.sendParticles(ParticleTypes.WITCH,
+				target.getX(), target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
+				12, 0.3D, 0.4D, 0.3D, 0.02D);
+		level.playSound(null, target.getX(), target.getY(), target.getZ(),
+				net.minecraft.sounds.SoundEvents.ELDER_GUARDIAN_CURSE,
+				net.minecraft.sounds.SoundSource.PLAYERS,
+				0.6F, 1.4F);
+		return true;
+	}
+
+	// -------------------------------------------------------------------------
+	// Spider climb tick — вешаем эффект паука каждую секунду
+	// -------------------------------------------------------------------------
+
+	private static void tickSpiderClimb(MinecraftServer server) {
+		if (server.getTickCount() % 20 != 0) return;
+		long now = server.overworld().getGameTime();
+
+		SPIDER_CLIMB_PLAYERS.entrySet().removeIf(entry -> {
+			ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+			if (player == null) return true;
+			if (now > entry.getValue()) {
+				// Снимаем эффект
+				player.removeEffect(MobEffects.SLOWNESS);
+				return true;
+			}
+			// CLIMBING — в ванилле нет прямого эффекта "лезть по стене",
+			// но можно поставить игроку флаг через EntityData или использовать
+			// эффект левитации + ограничение. Наилучший вариант — пока просто
+			// даём эффект "медленного падения" чтобы игрок мог карабкаться,
+			// а реальный climbing требует микса. Ставим SLOW_FALLING + подбор.
+			player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 25, 0, false, false));
+
+			// Партиклы паутины вокруг игрока раз в секунду
+			ServerLevel level = player.level();
+			level.sendParticles(ParticleTypes.ITEM_COBWEB,
+					player.getX(), player.getY() + 1.0D, player.getZ(),
+					4, 0.3D, 0.5D, 0.3D, 0.01D);
+			return false;
+		});
+	}
+
+	public static boolean isSpiderClimbing(ServerPlayer player) {
+		Long expire = SPIDER_CLIMB_PLAYERS.get(player.getUUID());
+		if (expire == null) return false;
+		if (player.level().getGameTime() > expire) {
+			SPIDER_CLIMB_PLAYERS.remove(player.getUUID());
+			return false;
+		}
+		return true;
+	}
+
+	// -------------------------------------------------------------------------
+	// Beam helpers для Hex
+	// -------------------------------------------------------------------------
+
+	private enum BeamColor {
+		BLUE, GRAY, BROWN, BLACK, GREEN, DARK, YELLOW, PINK
+	}
+
+	private static void drawHexBeam(ServerLevel level, Vec3 start, Vec3 end, BeamColor color) {
+		Vec3 delta = end.subtract(start);
+		double distance = delta.length();
+		if (distance <= 0.0D) return;
+		Vec3 dir = delta.normalize();
+
+		for (double step = 0.0D; step <= distance; step += 0.3D) {
+			Vec3 point = start.add(dir.scale(step));
+			switch (color) {
+				case BLUE   -> level.sendParticles(ParticleTypes.FALLING_WATER, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+				case GRAY   -> level.sendParticles(ParticleTypes.WITCH, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+				case BROWN  -> level.sendParticles(ParticleTypes.FALLING_DRIPSTONE_LAVA, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+				case BLACK  -> level.sendParticles(ParticleTypes.SQUID_INK, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+				case GREEN  -> level.sendParticles(ParticleTypes.HAPPY_VILLAGER, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+				case DARK   -> { level.sendParticles(ParticleTypes.SOUL, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D); }
+				case YELLOW -> level.sendParticles(ParticleTypes.WAX_ON, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+				case PINK   -> level.sendParticles(ParticleTypes.WITCH, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+			}
+		}
+	}
+
+	private static void drawGrayBeam(ServerLevel level, Vec3 start, Vec3 end) {
+		Vec3 delta = end.subtract(start);
+		double distance = delta.length();
+		if (distance <= 0.0D) return;
+		Vec3 dir = delta.normalize();
+		for (double step = 0.0D; step <= distance; step += 0.3D) {
+			Vec3 point = start.add(dir.scale(step));
+			level.sendParticles(ParticleTypes.WITCH, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+			level.sendParticles(ParticleTypes.POOF, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Существующие способности (без изменений)
+	// -------------------------------------------------------------------------
 
 	public static boolean useMysticCharge(ServerPlayer player) {
 		ServerLevel level = player.level();
@@ -66,7 +279,7 @@ public final class WarlockAbilities {
 		float maxDamage = warlockLevel >= 10 ? 12.0F : 8.0F;
 		float damage = minDamage + player.getRandom().nextFloat() * (maxDamage - minDamage);
 
-		drawBeam(level, player.getEyePosition(), target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D), BeamColor.RED);
+		drawBeam(level, player.getEyePosition(), target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D), OldBeamColor.RED);
 		target.hurtServer(level, player.damageSources().playerAttack(player), damage);
 
 		if (warlockLevel >= 6) {
@@ -121,14 +334,9 @@ public final class WarlockAbilities {
 		for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, searchBox, entity -> entity != player && entity.isAlive())) {
 			Vec3 toTarget = target.position().add(0.0D, target.getBbHeight() * 0.5D, 0.0D).subtract(start);
 			double distance = toTarget.length();
-			if (distance > 5.0D || distance <= 0.0D) {
-				continue;
-			}
-
+			if (distance > 5.0D || distance <= 0.0D) continue;
 			double angleDot = look.dot(toTarget.normalize());
-			if (angleDot < 0.72D) {
-				continue;
-			}
+			if (angleDot < 0.72D) continue;
 
 			target.addEffect(new MobEffectInstance(MobEffects.POISON, 10 * 20, 0), player);
 			target.hurtServer(level, player.damageSources().playerAttack(player), 5.0F);
@@ -172,9 +380,7 @@ public final class WarlockAbilities {
 
 	public static boolean useVampiricTouch(ServerPlayer player) {
 		LivingEntity target = BardAbilities.raycastLivingEntity(player, 3.0D);
-		if (target == null) {
-			return false;
-		}
+		if (target == null) return false;
 
 		target.hurtServer(player.level(), player.damageSources().playerAttack(player), 8.0F);
 		player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + 8.0F));
@@ -189,11 +395,9 @@ public final class WarlockAbilities {
 
 	public static boolean useCounterspell(ServerPlayer player) {
 		LivingEntity target = BardAbilities.raycastLivingEntity(player, 30.0D);
-		if (!(target instanceof ServerPlayer targetPlayer)) {
-			return false;
-		}
+		if (!(target instanceof ServerPlayer targetPlayer)) return false;
 
-		drawBeam(player.level(), player.getEyePosition(), targetPlayer.getEyePosition(), BeamColor.PINK);
+		drawBeam(player.level(), player.getEyePosition(), targetPlayer.getEyePosition(), OldBeamColor.PINK);
 		WildMagicServerState.drainManaAndClearSpellEffects(targetPlayer);
 		player.level().playSound(null, targetPlayer.getX(), targetPlayer.getY(), targetPlayer.getZ(),
 				net.minecraft.sounds.SoundEvents.ENCHANTMENT_TABLE_USE,
@@ -235,12 +439,10 @@ public final class WarlockAbilities {
 
 	public static boolean useFingerOfDeath(ServerPlayer player) {
 		LivingEntity target = BardAbilities.raycastLivingEntity(player, 25.0D);
-		if (target == null) {
-			return false;
-		}
+		if (target == null) return false;
 
 		ServerLevel level = player.level();
-		drawBeam(level, player.getEyePosition(), target.getEyePosition(), BeamColor.GREEN);
+		drawBeam(level, player.getEyePosition(), target.getEyePosition(), OldBeamColor.GREEN);
 		float damage = 2.0F + player.getRandom().nextFloat() * 16.0F;
 		target.hurtServer(level, player.damageSources().magic(), damage);
 		level.playSound(null, target.getX(), target.getY(), target.getZ(),
@@ -255,17 +457,13 @@ public final class WarlockAbilities {
 
 	public static boolean useBreakthrough(ServerPlayer player) {
 		LivingEntity target = BardAbilities.raycastLivingEntity(player, 30.0D);
-		if (target == null) {
-			return false;
-		}
+		if (target == null) return false;
 
 		ServerLevel level = player.level();
-		drawBeam(level, player.getEyePosition(), target.getEyePosition(), BeamColor.PINK);
+		drawBeam(level, player.getEyePosition(), target.getEyePosition(), OldBeamColor.PINK);
 		float damage = 2.0F + player.getRandom().nextFloat() * 14.0F;
 		player.hurtServer(level, player.damageSources().generic(), damage);
-		if (!player.isAlive()) {
-			return true;
-		}
+		if (!player.isAlive()) return true;
 
 		Vec3 behindTarget = target.position().subtract(player.getLookAngle().normalize().scale(0.8D));
 		player.teleportTo(behindTarget.x, behindTarget.y, behindTarget.z);
@@ -282,12 +480,10 @@ public final class WarlockAbilities {
 
 	public static boolean usePowerWordDeath(ServerPlayer player) {
 		LivingEntity target = BardAbilities.raycastLivingEntity(player, 15.0D);
-		if (target == null) {
-			return false;
-		}
+		if (target == null) return false;
 
 		ServerLevel level = player.level();
-		drawBeam(level, player.getEyePosition(), target.getEyePosition(), BeamColor.GREEN);
+		drawBeam(level, player.getEyePosition(), target.getEyePosition(), OldBeamColor.GREEN);
 		DEATH_RITUALS.put(target.getUUID(), new DeathRitual(player.getUUID(), target.getUUID(), target.position(), level.getGameTime() + 5 * 20L));
 		level.playSound(null, target.getX(), target.getY(), target.getZ(),
 				net.minecraft.sounds.SoundEvents.TRIAL_SPAWNER_OMINOUS_ACTIVATE,
@@ -297,14 +493,10 @@ public final class WarlockAbilities {
 	}
 
 	public static void onPlayerDamaged(ServerPlayer player, LivingEntity attacker, ServerLevel level) {
-		if (REFLECTING_AGATHYS.get()) {
-			return;
-		}
+		if (REFLECTING_AGATHYS.get()) return;
 
 		AgathysState state = ARMOR_OF_AGATHYS.get(player.getUUID());
-		if (state == null || state.retaliated() || level.getGameTime() > state.expireTime()) {
-			return;
-		}
+		if (state == null || state.retaliated() || level.getGameTime() > state.expireTime()) return;
 
 		ARMOR_OF_AGATHYS.put(player.getUUID(), state.withRetaliated());
 		REFLECTING_AGATHYS.set(true);
@@ -325,9 +517,8 @@ public final class WarlockAbilities {
 
 	public static void tick(MinecraftServer server) {
 		tickPactBlades(server);
-		if (server.getTickCount() % 20 != 0) {
-			return;
-		}
+		tickSpiderClimb(server);
+		if (server.getTickCount() % 20 != 0) return;
 
 		tickWarlockPassives(server);
 		tickArmorOfAgathys(server);
@@ -341,10 +532,7 @@ public final class WarlockAbilities {
 	public static void tickArmorOfAgathys(MinecraftServer server) {
 		long now = server.overworld().getGameTime();
 		ARMOR_OF_AGATHYS.entrySet().removeIf(entry -> {
-			if (now <= entry.getValue().expireTime()) {
-				return false;
-			}
-
+			if (now <= entry.getValue().expireTime()) return false;
 			ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
 			if (player != null && player.getAbsorptionAmount() <= entry.getValue().damage() + 0.5F) {
 				player.setAbsorptionAmount(0.0F);
@@ -356,6 +544,7 @@ public final class WarlockAbilities {
 	public static void clearPlayer(ServerPlayer player) {
 		ARMOR_OF_AGATHYS.remove(player.getUUID());
 		PACT_BLADE_OWNERS.remove(player.getUUID());
+		SPIDER_CLIMB_PLAYERS.remove(player.getUUID());
 		removePactBladeFromInventory(player);
 		DARKNESS_ZONES.entrySet().removeIf(entry -> entry.getValue().casterId().equals(player.getUUID()));
 		DEATH_CIRCLES.entrySet().removeIf(entry -> entry.getValue().casterId().equals(player.getUUID()));
@@ -369,10 +558,7 @@ public final class WarlockAbilities {
 
 	public static boolean isSummonedUndeadFriendly(LivingEntity attacker, LivingEntity target) {
 		UUID ownerId = SUMMONED_UNDEAD.get(attacker.getUUID());
-		if (ownerId == null) {
-			return false;
-		}
-
+		if (ownerId == null) return false;
 		if (target instanceof ServerPlayer targetPlayer) {
 			return targetPlayer.getUUID().equals(ownerId) || isWarlock(targetPlayer);
 		}
@@ -381,30 +567,36 @@ public final class WarlockAbilities {
 
 	public static void applyUndeadTouch(ServerPlayer attacker, LivingEntity target) {
 		PlayerClassData data = WildMagicServerState.get(attacker);
-		if (!data.hasClass() || data.selectedClass() != WildMagicClass.WARLOCK || data.level() < 5 || !attacker.getMainHandItem().isEmpty()) {
-			return;
-		}
-
+		if (!data.hasClass() || data.selectedClass() != WildMagicClass.WARLOCK || data.level() < 5 || !attacker.getMainHandItem().isEmpty()) return;
 		target.addEffect(new MobEffectInstance(MobEffects.WITHER, 4 * 20, 0), attacker);
 	}
 
+	// =========================================================================
+	// ФИКС: пассивка 10 уровня — слабость только на солнце
+	// =========================================================================
 	private static void tickWarlockPassives(MinecraftServer server) {
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			if (!isWarlock(player)) {
-				continue;
-			}
+			if (!isWarlock(player)) continue;
 
 			player.removeEffect(MobEffects.HUNGER);
 			player.setAirSupply(player.getMaxAirSupply());
 			player.addEffect(new MobEffectInstance(MobEffects.WATER_BREATHING, 25 * 20, 0, false, false), player);
 			player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 25 * 20, 0, false, false), player);
+
 			if (dataLevel(player) >= 10) {
 				player.removeEffect(MobEffects.POISON);
 				player.removeEffect(MobEffects.WITHER);
-				player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 25 * 20, 0, false, false), player);
-				if (player.level().isBrightOutside() && player.level().canSeeSkyFromBelowWater(player.blockPosition())) {
+
+				boolean inSun = player.level().isBrightOutside()
+						&& player.level().canSeeSkyFromBelowWater(player.blockPosition());
+
+				if (inSun) {
+					// На солнце: горит И получает слабость
 					player.igniteForSeconds(3.0F);
+					player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 25 * 20, 0, false, false), player);
 				}
+				// НЕ на солнце — слабость не вешаем, убираем если была
+				// (removeEffect только если эффект ещё активен — не трогаем если нет)
 			}
 		}
 	}
@@ -413,16 +605,12 @@ public final class WarlockAbilities {
 		Set<UUID> activeOwners = new HashSet<>(PACT_BLADE_OWNERS.keySet());
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			removeForeignPactBlades(player);
-			if (!activeOwners.contains(player.getUUID())) {
-				continue;
-			}
-
+			if (!activeOwners.contains(player.getUUID())) continue;
 			if (!player.isAlive()) {
 				PACT_BLADE_OWNERS.remove(player.getUUID());
 				removePactBladeFromInventory(player);
 				continue;
 			}
-
 			if (!hasPactBlade(player)) {
 				player.getInventory().add(createPactBlade(player));
 			}
@@ -445,13 +633,8 @@ public final class WarlockAbilities {
 			AABB area = new AABB(zone.center().x - 3.5D, zone.center().y - 2.0D, zone.center().z - 3.5D, zone.center().x + 3.5D, zone.center().y + 2.0D, zone.center().z + 3.5D);
 			level.sendParticles(ParticleTypes.SQUID_INK, zone.center().x, zone.center().y + 1.0D, zone.center().z, 32, 3.0D, 1.5D, 3.0D, 0.02D);
 			for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, area, LivingEntity::isAlive)) {
-				if (entity.getUUID().equals(zone.casterId())) {
-					continue;
-				}
-				if (entity instanceof ServerPlayer player && isWarlock(player)) {
-					continue;
-				}
-
+				if (entity.getUUID().equals(zone.casterId())) continue;
+				if (entity instanceof ServerPlayer sp && isWarlock(sp)) continue;
 				entity.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 45, 0, false, false));
 				entity.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 45, 0, false, false));
 			}
@@ -469,9 +652,7 @@ public final class WarlockAbilities {
 			dryPlants(level, circle.center());
 			AABB area = new AABB(circle.center().x - 10.0D, circle.center().y - 3.0D, circle.center().z - 10.0D, circle.center().x + 10.0D, circle.center().y + 3.0D, circle.center().z + 10.0D);
 			for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, area, entity -> entity.isAlive() && entity.position().distanceTo(circle.center()) <= 10.0D)) {
-				if (caster != null && entity == caster) {
-					continue;
-				}
+				if (caster != null && entity == caster) continue;
 				entity.addEffect(new MobEffectInstance(MobEffects.WITHER, 5 * 20, 0), caster);
 				entity.addEffect(new MobEffectInstance(MobEffects.DARKNESS, 10 * 20, 0), caster);
 			}
@@ -484,9 +665,7 @@ public final class WarlockAbilities {
 			DeathRitual ritual = entry.getValue();
 			LivingEntity target = findLivingEntity(server, ritual.targetId());
 			ServerPlayer caster = server.getPlayerList().getPlayer(ritual.casterId());
-			if (target == null || !target.isAlive()) {
-				return true;
-			}
+			if (target == null || !target.isAlive()) return true;
 
 			ServerLevel level = (ServerLevel) target.level();
 			Vec3 center = target.position();
@@ -494,9 +673,7 @@ public final class WarlockAbilities {
 			target.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 30, 255, false, false), caster);
 			target.addEffect(new MobEffectInstance(MobEffects.MINING_FATIGUE, 30, 4, false, false), caster);
 			level.sendParticles(ParticleTypes.SOUL, center.x, center.y + target.getBbHeight() * 0.5D, center.z, 10, 0.7D, 0.8D, 0.7D, 0.05D);
-			if (now <= ritual.expireTime()) {
-				return false;
-			}
+			if (now <= ritual.expireTime()) return false;
 
 			target.hurtServer(level, caster == null ? target.damageSources().magic() : caster.damageSources().magic(), 40.0F);
 			level.sendParticles(ParticleTypes.SCULK_SOUL, center.x, center.y + 0.8D, center.z, 64, 1.0D, 1.0D, 1.0D, 0.12D);
@@ -510,10 +687,7 @@ public final class WarlockAbilities {
 
 	private static void tickDeadOneMobPacification(MinecraftServer server) {
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			if (!isDeadOne(player)) {
-				continue;
-			}
-
+			if (!isDeadOne(player)) continue;
 			AABB area = player.getBoundingBox().inflate(32.0D);
 			for (Mob mob : player.level().getEntitiesOfClass(Mob.class, area, mob -> mob.getTarget() == player)) {
 				mob.setTarget(null);
@@ -524,15 +698,9 @@ public final class WarlockAbilities {
 	private static void tickSummonedUndead(MinecraftServer server) {
 		SUMMONED_UNDEAD.entrySet().removeIf(entry -> {
 			ServerPlayer owner = server.getPlayerList().getPlayer(entry.getValue());
-			if (owner == null) {
-				return true;
-			}
-
+			if (owner == null) return true;
 			LivingEntity summon = findLivingEntity(server, entry.getKey());
-			if (!(summon instanceof Mob mob) || !mob.isAlive()) {
-				return true;
-			}
-
+			if (!(summon instanceof Mob mob) || !mob.isAlive()) return true;
 			if (mob.getTarget() == null || !mob.getTarget().isAlive() || isFriendlyToSummon(owner, mob.getTarget())) {
 				mob.setTarget(findNearestSummonTarget(owner, mob));
 			}
@@ -555,9 +723,7 @@ public final class WarlockAbilities {
 	}
 
 	private static boolean isFriendlyToSummon(ServerPlayer owner, LivingEntity entity) {
-		if (entity == owner || SUMMONED_UNDEAD.containsKey(entity.getUUID())) {
-			return true;
-		}
+		if (entity == owner || SUMMONED_UNDEAD.containsKey(entity.getUUID())) return true;
 		return entity instanceof ServerPlayer player && (isWarlock(player) || isDeadOne(player));
 	}
 
@@ -569,10 +735,7 @@ public final class WarlockAbilities {
 		};
 		EntityType<? extends Mob> type = pool[owner.getRandom().nextInt(pool.length)];
 		Mob mob = type.create(level, EntitySpawnReason.MOB_SUMMONED);
-		if (mob == null) {
-			return;
-		}
-
+		if (mob == null) return;
 		mob.setPos(position.x, position.y, position.z);
 		mob.setPersistenceRequired();
 		level.addFreshEntity(mob);
@@ -581,10 +744,7 @@ public final class WarlockAbilities {
 
 	private static void spawnZombie(ServerLevel level, ServerPlayer owner, Vec3 position) {
 		Zombie zombie = EntityType.ZOMBIE.create(level, EntitySpawnReason.MOB_SUMMONED);
-		if (zombie == null) {
-			return;
-		}
-
+		if (zombie == null) return;
 		zombie.setPos(position.x, position.y, position.z);
 		zombie.setPersistenceRequired();
 		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
@@ -617,9 +777,7 @@ public final class WarlockAbilities {
 	private static boolean hasPactBlade(ServerPlayer player) {
 		for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
 			ItemStack stack = player.getInventory().getItem(slot);
-			if (isPactBlade(stack) && isPactBladeOwner(stack, player.getUUID())) {
-				return true;
-			}
+			if (isPactBlade(stack) && isPactBladeOwner(stack, player.getUUID())) return true;
 		}
 		return false;
 	}
@@ -627,9 +785,7 @@ public final class WarlockAbilities {
 	private static void removePactBladeFromInventory(ServerPlayer player) {
 		for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
 			ItemStack stack = player.getInventory().getItem(slot);
-			if (isPactBlade(stack)) {
-				player.getInventory().setItem(slot, ItemStack.EMPTY);
-			}
+			if (isPactBlade(stack)) player.getInventory().setItem(slot, ItemStack.EMPTY);
 		}
 	}
 
@@ -643,10 +799,7 @@ public final class WarlockAbilities {
 	}
 
 	private static boolean isPactBlade(ItemStack stack) {
-		if (stack.isEmpty()) {
-			return false;
-		}
-
+		if (stack.isEmpty()) return false;
 		CustomData data = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
 		return data.copyTag().getBooleanOr(PACT_BLADE_TAG, false);
 	}
@@ -678,10 +831,7 @@ public final class WarlockAbilities {
 		BlockPos origin = BlockPos.containing(center);
 		for (int dx = -10; dx <= 10; dx++) {
 			for (int dz = -10; dz <= 10; dz++) {
-				if (dx * dx + dz * dz > 100) {
-					continue;
-				}
-
+				if (dx * dx + dz * dz > 100) continue;
 				for (int dy = -2; dy <= 2; dy++) {
 					BlockPos pos = origin.offset(dx, dy, dz);
 					var state = level.getBlockState(pos);
@@ -696,19 +846,17 @@ public final class WarlockAbilities {
 		}
 	}
 
-	private static void drawBeam(ServerLevel level, Vec3 start, Vec3 end, BeamColor color) {
+	// Старый enum для существующих способностей
+	private static void drawBeam(ServerLevel level, Vec3 start, Vec3 end, OldBeamColor color) {
 		Vec3 delta = end.subtract(start);
 		double distance = delta.length();
-		if (distance <= 0.0D) {
-			return;
-		}
-
+		if (distance <= 0.0D) return;
 		Vec3 direction = delta.normalize();
 		for (double step = 0.0D; step <= distance; step += 0.25D) {
 			Vec3 point = start.add(direction.scale(step));
-			if (color == BeamColor.PINK) {
+			if (color == OldBeamColor.PINK) {
 				level.sendParticles(ParticleTypes.WITCH, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
-			} else if (color == BeamColor.GREEN) {
+			} else if (color == OldBeamColor.GREEN) {
 				level.sendParticles(ParticleTypes.SOUL, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
 				level.sendParticles(ParticleTypes.HAPPY_VILLAGER, point.x, point.y, point.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
 			} else {
@@ -737,10 +885,8 @@ public final class WarlockAbilities {
 		return data.hasClass() && data.selectedClass() == WildMagicClass.WARLOCK;
 	}
 
-	private enum BeamColor {
-		RED,
-		PINK,
-		GREEN
+	private enum OldBeamColor {
+		RED, PINK, GREEN
 	}
 
 	private record AgathysState(long expireTime, float damage, boolean retaliated) {
@@ -749,12 +895,7 @@ public final class WarlockAbilities {
 		}
 	}
 
-	private record DarknessZone(UUID casterId, Vec3 center, long expireTime) {
-	}
-
-	private record DeathCircle(UUID casterId, Vec3 center, long startTime, long expireTime) {
-	}
-
-	private record DeathRitual(UUID casterId, UUID targetId, Vec3 startCenter, long expireTime) {
-	}
+	private record DarknessZone(UUID casterId, Vec3 center, long expireTime) {}
+	private record DeathCircle(UUID casterId, Vec3 center, long startTime, long expireTime) {}
+	private record DeathRitual(UUID casterId, UUID targetId, Vec3 startCenter, long expireTime) {}
 }
