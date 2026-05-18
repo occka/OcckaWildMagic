@@ -3,38 +3,45 @@ package wildmagic.classdata;
 import java.util.Locale;
 import java.util.Optional;
 
-public record PlayerClassData(WildMagicClass selectedClass, int level, int exp, int mana, int maxMana, String slotOneAbility, String slotTwoAbility, String slotThreeAbility) {
+public record PlayerClassData(WildMagicClass selectedClass, int level, int exp, int mana, int maxMana, int maxManaBonus, String slotOneAbility, String slotTwoAbility, String slotThreeAbility) {
 	public static final int ACTIVE_SLOT_COUNT = 3;
-	public static final PlayerClassData EMPTY = new PlayerClassData(null, ClassProgression.MIN_LEVEL, 0, 0, 0, "", "", "");
+	public static final PlayerClassData EMPTY = new PlayerClassData(null, ClassProgression.MIN_LEVEL, 0, 0, 0, 0, "", "", "");
 
 	public boolean hasClass() {
 		return selectedClass != null;
 	}
 
 	public PlayerClassData withClass(WildMagicClass clazz) {
-		return createForClass(clazz, ClassProgression.MIN_LEVEL);
-	}
-
+    return createForClass(clazz, ClassProgression.MIN_LEVEL);
+}
 	public static PlayerClassData createForClass(WildMagicClass clazz, int level) {
 		int clampedLevel = ClassProgression.clampLevel(level);
 		int maxMana = clazz.usesMana() ? ClassProgression.maxManaForLevel(clampedLevel) : 0;
-		return new PlayerClassData(clazz, clampedLevel, 0, maxMana, maxMana, "", "", "");
+		return new PlayerClassData(clazz, clampedLevel, 0, maxMana, maxMana, 0, "", "", "");
 	}
 
 	public PlayerClassData withExp(int newExp) {
-		return new PlayerClassData(selectedClass, level, Math.max(0, newExp), mana, maxMana, slotOneAbility, slotTwoAbility, slotThreeAbility);
+		return new PlayerClassData(selectedClass, level, Math.max(0, newExp), mana, maxMana, maxManaBonus, slotOneAbility, slotTwoAbility, slotThreeAbility);
 	}
+
+	public int effectiveMaxMana() {
+    return maxMana + maxManaBonus;
+}
+
+public PlayerClassData withMaxManaBonus(int bonus) {
+    return new PlayerClassData(selectedClass, level, exp, Math.min(mana, maxMana + bonus), maxMana, bonus, slotOneAbility, slotTwoAbility, slotThreeAbility);
+}
 
 	public PlayerClassData withLevel(int newLevel) {
 		int clamped = ClassProgression.clampLevel(newLevel);
 		int newMaxMana = selectedClass != null && selectedClass.usesMana() ? ClassProgression.maxManaForLevel(clamped) : 0;
 		int newMana = newMaxMana == 0 ? 0 : Math.min(newMaxMana, Math.max(mana, newMaxMana));
-		return new PlayerClassData(selectedClass, clamped, exp, newMana, newMaxMana, slotOneAbility, slotTwoAbility, slotThreeAbility);
+		return new PlayerClassData(selectedClass, clamped, exp, newMana, newMaxMana, maxManaBonus, slotOneAbility, slotTwoAbility, slotThreeAbility);
 	}
 
 	public PlayerClassData withMana(int newMana) {
-		return new PlayerClassData(selectedClass, level, exp, Math.clamp(newMana, 0, maxMana), maxMana, slotOneAbility, slotTwoAbility, slotThreeAbility);
-	}
+    return new PlayerClassData(selectedClass, level, exp, Math.clamp(newMana, 0, effectiveMaxMana()), maxMana, maxManaBonus, slotOneAbility, slotTwoAbility, slotThreeAbility);
+}
 
 	public PlayerClassData consumeMana(int manaCost) {
 		return withMana(mana - Math.max(0, manaCost));
@@ -46,9 +53,9 @@ public record PlayerClassData(WildMagicClass selectedClass, int level, int exp, 
 		String slotTwo = removeDuplicate(slot, 1, normalizedAbilityId, slotTwoAbility);
 		String slotThree = removeDuplicate(slot, 2, normalizedAbilityId, slotThreeAbility);
 		return switch (slot) {
-			case 0 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, normalizedAbilityId, slotTwo, slotThree);
-			case 1 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, slotOne, normalizedAbilityId, slotThree);
-			case 2 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, slotOne, slotTwo, normalizedAbilityId);
+			case 0 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, maxManaBonus, normalizedAbilityId, slotTwo, slotThree);
+case 1 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, maxManaBonus, slotOne, normalizedAbilityId, slotThree);
+case 2 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, maxManaBonus, slotOne, slotTwo, normalizedAbilityId);
 			default -> this;
 		};
 	}
@@ -105,15 +112,13 @@ public record PlayerClassData(WildMagicClass selectedClass, int level, int exp, 
 			int maxMana = clazz.get().usesMana() ? ClassProgression.maxManaForLevel(level) : 0;
 			int mana = Math.clamp(Integer.parseInt(parts[3]), 0, maxMana);
 			return new PlayerClassData(
-					clazz.get(),
-					level,
-					Integer.parseInt(parts[2]),
-					mana,
-					maxMana,
-					parts.length > 5 ? parts[5] : "",
-					parts.length > 6 ? parts[6] : "",
-					parts.length > 7 ? parts[7] : ""
-			);
+    clazz.get(), level,
+    Integer.parseInt(parts[2]),
+    mana, maxMana, 0,
+    parts.length > 5 ? parts[5] : "",
+    parts.length > 6 ? parts[6] : "",
+    parts.length > 7 ? parts[7] : ""
+);
 		} catch (NumberFormatException ignored) {
 			return EMPTY;
 		}

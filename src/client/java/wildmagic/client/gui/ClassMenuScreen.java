@@ -151,7 +151,7 @@ private void initClassDetails(PlayerClassData data) {
     }
 
     if (clazz.usesMana()) {
-        graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.maxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
+        graphics.text(font, Component.literal("Мана: " + data.mana() + " / " + data.effectiveMaxMana() + " (+" + ClassProgression.manaRegenPerSecond(clazz) + "/с)").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
     } else {
         graphics.text(font, Component.literal("Ресурс: КД способностей").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
     }

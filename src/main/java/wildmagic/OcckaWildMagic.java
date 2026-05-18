@@ -15,6 +15,7 @@ public class OcckaWildMagic implements ModInitializer {
 	public void onInitialize() {
 		WildMagicNetworking.registerPayloadTypes();
 		WildMagicNetworking.registerServerReceivers();
+		WildMagicItems.register();
 		WildMagicServerState.registerEvents();
 		WildMagicCommands.register();
 		LOGGER.info("Occka Wild Magic class framework initialized");

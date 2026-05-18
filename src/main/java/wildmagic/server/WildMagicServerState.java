@@ -48,6 +48,8 @@ public final class WildMagicServerState {
 private static final Identifier BARD_SWORD_DAMAGE_ID = Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "bard_sword_damage");
 private static final Identifier BARD_SWORD_SPEED_ID = Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "bard_sword_speed");
 private static final Identifier BARD_SWORD_REACH_ID = Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "bard_sword_reach");
+// одно объявление:
+private static final Map<UUID, long[]> MANA_EFFECTS = new ConcurrentHashMap<>();
 	private static MinecraftServer currentServer;
 	private static Path saveFile;
 
@@ -113,6 +115,22 @@ private static final Identifier BARD_SWORD_REACH_ID = Identifier.fromNamespaceAn
 		sync(player);
 		save(currentServer);
 	}
+
+	public static void applyManaEffect(ServerPlayer player, int manaBonus, long durationTicks) {
+    long expireTime = player.level().getGameTime() + durationTicks;
+    MANA_EFFECTS.put(player.getUUID(), new long[]{manaBonus, expireTime});
+    PlayerClassData current = get(player);
+    if (current.hasClass() && current.selectedClass().usesMana()) {
+        PLAYER_DATA.put(player.getUUID(), current.withMaxManaBonus(manaBonus));
+    }
+    sync(player);
+}
+
+private static int getManaBonus(UUID playerId) {
+    long[] effect = MANA_EFFECTS.get(playerId);
+    if (effect == null) return 0;
+    return (int) effect[0];
+}
 
 	public static void setActiveAbility(ServerPlayer player, int slot, String abilityId) {
 		PlayerClassData current = get(player);
@@ -289,6 +307,30 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 		sync(player);
 	}
 
+	private static final Map<UUID, int[]> MANA_EFFECTS = new ConcurrentHashMap<>();
+// int[0] = бонус маны, int[1] = тик окончания
+
+public static void applyManaEffect(ServerPlayer player, int manaBonus, int durationTicks) {
+    long expireTime = player.level().getGameTime() + durationTicks;
+    MANA_EFFECTS.put(player.getUUID(), new int[]{manaBonus, (int) expireTime});
+    // сразу пересчитываем максимальную ману
+    syncManaEffect(player);
+}
+
+public static int getManaBonus(ServerPlayer player) {
+    int[] effect = MANA_EFFECTS.get(player.getUUID());
+    if (effect == null) return 0;
+    if (player.level().getGameTime() > effect[1]) {
+        MANA_EFFECTS.remove(player.getUUID());
+        return 0;
+    }
+    return effect[0];
+}
+
+private static void syncManaEffect(ServerPlayer player) {
+    sync(player);
+}
+
 	private static boolean canCastInCurrentArmor(ServerPlayer player, PlayerClassData data, AbilityDefinition ability) {
 		if (ability.passive()) {
 			return true;
@@ -456,6 +498,26 @@ case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(p
 		if (server.getTickCount() % 20 != 0) {
 			return;
 		}
+MANA_EFFECTS.entrySet().removeIf(entry -> {
+    ServerPlayer p = server.getPlayerList().getPlayer(entry.getKey());
+    if (p == null) return true;
+    if (p.level().getGameTime() > entry.getValue()[1]) {
+        // эффект кончился — убираем бонус
+        PlayerClassData current = get(p);
+        if (current.hasClass()) {
+            PLAYER_DATA.put(p.getUUID(), current.withMaxManaBonus(0));
+        }
+        sync(p);
+        return true;
+    }
+    // обновляем бонус каждую секунду чтобы не слетел
+    PlayerClassData current = get(p);
+    if (current.hasClass() && current.maxManaBonus() != (int) entry.getValue()[0]) {
+        PLAYER_DATA.put(p.getUUID(), current.withMaxManaBonus((int) entry.getValue()[0]));
+    }
+    return false;
+});
+
 		WildMagicZones.tickHeroism(server);
         BardAbilities.tickGreaterInvisibility(server);
         WildMagicZones.tickSlowZones(server);

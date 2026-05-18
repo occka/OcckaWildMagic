@@ -1,0 +1,26 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+        " A ",
+        "EWD",
+        "   "
+    ],
+    "key": {
+        "W": {
+            "item": "minecraft:water_bucket"
+        },
+        "E": {
+            "item": "minecraft:ender_eye"
+        },
+        "D": {
+            "item": "minecraft:diamond"
+        },
+        "A": {
+            "item": "minecraft:glass_bottle"
+        }
+    },
+    "result": {
+        "id": "occkawildmagic:mana_potion",
+        "count": 1
+    }
+}

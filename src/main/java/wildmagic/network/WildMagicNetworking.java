@@ -37,6 +37,7 @@ public final class WildMagicNetworking {
 
 	public static void registerPayloadTypes() {
 		PayloadTypeRegistry.clientboundPlay().register(SyncClassDataS2CPayload.TYPE, SyncClassDataS2CPayload.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(SpiderClimbS2CPayload.TYPE, SpiderClimbS2CPayload.CODEC);
 	}
 
 	public static void sendClassData(ServerPlayer player, PlayerClassData data) {
@@ -83,6 +84,20 @@ public final class WildMagicNetworking {
 			return TYPE;
 		}
 	}
+
+	public record SpiderClimbS2CPayload(boolean active) implements CustomPacketPayload {
+    public static final Type<SpiderClimbS2CPayload> TYPE = new Type<>(id("spider_climb"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, SpiderClimbS2CPayload> CODEC = StreamCodec.composite(
+            ByteBufCodecs.BOOL,
+            SpiderClimbS2CPayload::active,
+            SpiderClimbS2CPayload::new
+    );
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+}
 
 	public record SetAbilitySlotC2SPayload(int slot, String abilityId) implements CustomPacketPayload {
 		public static final Type<SetAbilitySlotC2SPayload> TYPE = new Type<>(id("set_ability_slot"));

@@ -130,29 +130,30 @@ public final class WarlockAbilities {
 	}
 
 	public static boolean useSpiderClimb(ServerPlayer player) {
-		ServerLevel level = player.level();
-		long expireTime = level.getGameTime() + 30 * 20L;
-		SPIDER_CLIMB_PLAYERS.put(player.getUUID(), expireTime);
+    ServerLevel level = player.level();
+    long expireTime = level.getGameTime() + 30 * 20L;
+    SPIDER_CLIMB_PLAYERS.put(player.getUUID(), expireTime);
 
-		// Эффект паутины — замедление не нужно, но ставим web-визуал
-		level.sendParticles(ParticleTypes.POOF,
-				player.getX(), player.getY() + 1.0D, player.getZ(),
-				16, 0.4D, 0.5D, 0.4D, 0.03D);
-		// Паутинные нити вокруг игрока
-		for (int i = 0; i < 8; i++) {
-			double angle = i / 8.0D * 2 * Math.PI;
-			level.sendParticles(ParticleTypes.ITEM_COBWEB,
-					player.getX() + Math.cos(angle) * 0.6D,
-					player.getY() + 0.8D,
-					player.getZ() + Math.sin(angle) * 0.6D,
-					1, 0.0D, 0.0D, 0.0D, 0.0D);
-		}
-		level.playSound(null, player.getX(), player.getY(), player.getZ(),
-				net.minecraft.sounds.SoundEvents.SPIDER_AMBIENT,
-				net.minecraft.sounds.SoundSource.PLAYERS,
-				0.9F, 0.7F);
-		return true;
-	}
+    net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+            new wildmagic.network.WildMagicNetworking.SpiderClimbS2CPayload(true));
+
+    level.sendParticles(ParticleTypes.POOF,
+            player.getX(), player.getY() + 1.0D, player.getZ(),
+            16, 0.4D, 0.5D, 0.4D, 0.03D);
+    for (int i = 0; i < 8; i++) {
+        double angle = i / 8.0D * 2 * Math.PI;
+        level.sendParticles(ParticleTypes.ITEM_COBWEB,
+                player.getX() + Math.cos(angle) * 0.6D,
+                player.getY() + 0.8D,
+                player.getZ() + Math.sin(angle) * 0.6D,
+                1, 0.0D, 0.0D, 0.0D, 0.0D);
+    }
+    level.playSound(null, player.getX(), player.getY(), player.getZ(),
+            net.minecraft.sounds.SoundEvents.SPIDER_AMBIENT,
+            net.minecraft.sounds.SoundSource.PLAYERS,
+            0.9F, 0.7F);
+    return true;
+}
 
 	public static boolean useRayOfWeakness(ServerPlayer player) {
 		ServerLevel level = player.level();
@@ -184,32 +185,60 @@ public final class WarlockAbilities {
 	// -------------------------------------------------------------------------
 
 	private static void tickSpiderClimb(MinecraftServer server) {
-		if (server.getTickCount() % 20 != 0) return;
-		long now = server.overworld().getGameTime();
+    long now = server.overworld().getGameTime();
 
-		SPIDER_CLIMB_PLAYERS.entrySet().removeIf(entry -> {
-			ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
-			if (player == null) return true;
-			if (now > entry.getValue()) {
-				// Снимаем эффект
-				player.removeEffect(MobEffects.SLOWNESS);
-				return true;
-			}
-			// CLIMBING — в ванилле нет прямого эффекта "лезть по стене",
-			// но можно поставить игроку флаг через EntityData или использовать
-			// эффект левитации + ограничение. Наилучший вариант — пока просто
-			// даём эффект "медленного падения" чтобы игрок мог карабкаться,
-			// а реальный climbing требует микса. Ставим SLOW_FALLING + подбор.
-			player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 25, 0, false, false));
+    SPIDER_CLIMB_PLAYERS.entrySet().removeIf(entry -> {
+        ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+        if (player == null) return true;
+        if (now > entry.getValue()) return true;
 
-			// Партиклы паутины вокруг игрока раз в секунду
-			ServerLevel level = player.level();
-			level.sendParticles(ParticleTypes.ITEM_COBWEB,
-					player.getX(), player.getY() + 1.0D, player.getZ(),
-					4, 0.3D, 0.5D, 0.3D, 0.01D);
-			return false;
-		});
-	}
+        if (server.getTickCount() % 20 == 0) {
+            player.level().sendParticles(ParticleTypes.ITEM_COBWEB,
+                    player.getX(), player.getY() + 1.0D, player.getZ(),
+                    4, 0.3D, 0.5D, 0.3D, 0.01D);
+        }
+
+        boolean touchingWallLow  = isTouchingWall(player, 0.5D);
+        boolean touchingWallHigh = isTouchingWall(player, 1.5D);
+        boolean grounded = player.onGround();
+
+        // у верхнего края блока — стена есть внизу но не вверху, перекидываем наверх
+        if (touchingWallLow && !touchingWallHigh && !grounded) {
+            Vec3 m = player.getDeltaMovement();
+            player.setDeltaMovement(m.x * 0.95, 0.3D, m.z * 0.95);
+            player.fallDistance = 0;
+            player.hurtMarked = true;
+            return false;
+        }
+
+        if (touchingWallLow && !grounded) {
+            Vec3 m = player.getDeltaMovement();
+            player.setDeltaMovement(m.x * 0.95, Math.max(m.y, 0.1), m.z * 0.95);
+            player.fallDistance = 0;
+            player.hurtMarked = true;
+        }
+
+        if (touchingWallLow && !grounded && player.getDeltaMovement().y < 0) {
+            player.setDeltaMovement(player.getDeltaMovement().x, 0, player.getDeltaMovement().z);
+            player.fallDistance = 0;
+        }
+
+        return false;
+    });
+}
+
+private static boolean isTouchingWall(ServerPlayer player, double yOffset) {
+    ServerLevel level = player.level();
+    double x = player.getX();
+    double y = player.getY() + yOffset;
+    double z = player.getZ();
+    double reach = 0.4D;
+
+    return !level.getBlockState(BlockPos.containing(x + reach, y, z)).isAir()
+        || !level.getBlockState(BlockPos.containing(x - reach, y, z)).isAir()
+        || !level.getBlockState(BlockPos.containing(x, y, z + reach)).isAir()
+        || !level.getBlockState(BlockPos.containing(x, y, z - reach)).isAir();
+}
 
 	public static boolean isSpiderClimbing(ServerPlayer player) {
 		Long expire = SPIDER_CLIMB_PLAYERS.get(player.getUUID());
