@@ -20,7 +20,7 @@
         }
     },
     "result": {
-        "id": "occkawildmagic:mana_potion",
+        "item": "occkawildmagic:mana_potion",
         "count": 1
     }
 }

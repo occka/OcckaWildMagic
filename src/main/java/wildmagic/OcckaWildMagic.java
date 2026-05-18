@@ -18,6 +18,7 @@ public class OcckaWildMagic implements ModInitializer {
 		WildMagicItems.register();
 		WildMagicServerState.registerEvents();
 		WildMagicCommands.register();
+
 		LOGGER.info("Occka Wild Magic class framework initialized");
 	}
 }

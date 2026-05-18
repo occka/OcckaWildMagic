@@ -5,15 +5,14 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import wildmagic.server.WildMagicServerState;
 
 public class ManaPotion extends Item {
     private final int tier;
 
-    public ManaPotion(int tier) {
-        super(new Item.Properties().stacksTo(16));
+    public ManaPotion(int tier, Properties properties) {
+        super(properties);
         this.tier = tier;
     }
 
