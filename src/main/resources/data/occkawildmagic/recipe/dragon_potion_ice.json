@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:ice",
+        "minecraft:powder_snow_bucket",
+        "minecraft:glass_bottle"
+    ],
+    "result": {
+        "id": "occkawildmagic:dragon_potion_ice",
+        "count": 1
+    }
+}

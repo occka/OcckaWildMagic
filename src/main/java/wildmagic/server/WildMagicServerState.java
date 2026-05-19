@@ -94,6 +94,7 @@ public final class WildMagicServerState {
 		PLAYER_DATA.put(player.getUUID(), updated);
 		ABILITY_COOLDOWNS.remove(player.getUUID());
 		WildMagicZones.clearPlayer(player);
+		wildmagic.server.ability.SorcererAbilities.clearPlayer(player);
 		BardAbilities.clearPlayer(player);
 		wildmagic.server.ability.WarlockAbilities.clearPlayer(player);
 		applyClassPassives(player);
@@ -105,6 +106,7 @@ public final class WildMagicServerState {
 		PLAYER_DATA.remove(player.getUUID());
 		ABILITY_COOLDOWNS.remove(player.getUUID());
 		WildMagicZones.clearPlayer(player);
+		wildmagic.server.ability.SorcererAbilities.clearPlayer(player);
 		BardAbilities.clearPlayer(player);
 		wildmagic.server.ability.WarlockAbilities.clearPlayer(player);
 		removeClassPassives(player);
@@ -187,6 +189,13 @@ public final class WildMagicServerState {
 			case "bard_charm" -> BardAbilities.useBardCharm(player);
 			case "bard_heroism" -> BardAbilities.useBardHeroism(player);
 			case "bard_invisibility" -> BardAbilities.useBardInvisibility(player);
+			case "sorcerer_dragon_breath" -> wildmagic.server.ability.SorcererAbilities.useDragonBreath(player);
+case "sorcerer_elemental_burst" -> wildmagic.server.ability.SorcererAbilities.useElementalBurst(player);
+case "sorcerer_draconic_wings" -> wildmagic.server.ability.SorcererAbilities.useDraconicWings(player);
+case "sorcerer_metamagic" -> wildmagic.server.ability.SorcererAbilities.useMetamagic(player);
+case "sorcerer_twinned_spell" -> wildmagic.server.ability.SorcererAbilities.useTwinnedSpell(player);
+case "sorcerer_quicken_spell" -> wildmagic.server.ability.SorcererAbilities.useQuickenSpell(player);
+case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWildSurge(player);
 			case "bard_dispel" -> BardAbilities.useBardDispel(player);
 			case "bard_slow_zone" -> BardAbilities.useBardSlowZone(player);
 			case "bard_haste" -> BardAbilities.useBardHaste(player);
@@ -426,6 +435,7 @@ public final class WildMagicServerState {
 		BardAbilities.tickDominate(server);
 		BardAbilities.tickForceCage(server);
 		BardAbilities.tickMordenkainenSword(server);
+		wildmagic.server.ability.SorcererAbilities.tickWings(server);
 		BardAbilities.tickHypnoticPattern(server);
 		WildMagicZones.tickInvisibility(server);
 		WildMagicZones.tickSilence(server);
@@ -566,6 +576,18 @@ public final class WildMagicServerState {
 		}
 		maxHealth.removeModifier(WIZARD_HEALTH_MODIFIER_ID);
 	}
+
+	public static void setSorcererElement(ServerPlayer player, wildmagic.classdata.SorcererElement element) {
+    PlayerClassData current = get(player);
+    if (!current.hasClass() || current.selectedClass() != WildMagicClass.SORCERER) return;
+    PLAYER_DATA.put(player.getUUID(), current.withSorcererElement(element));
+    sync(player);
+    save(currentServer);
+}
+
+public static long[] getCooldowns(ServerPlayer player) {
+    return ABILITY_COOLDOWNS.get(player.getUUID());
+}
 
 	private static void load(MinecraftServer server) {
 		currentServer = server;

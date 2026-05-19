@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:blaze_powder",
+        "minecraft:lava_bucket",
+        "minecraft:glass_bottle"
+    ],
+    "result": {
+        "id": "occkawildmagic:dragon_potion_fire",
+        "count": 1
+    }
+}

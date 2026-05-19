@@ -5,5 +5,10 @@
 	"key.occkawildmagic.ability_slot_2": "Использовать слот способности 2",
 	"key.occkawildmagic.ability_slot_3": "Использовать слот способности 3",
 	"item.occkawildmagic.mana_potion": "Зелье маны",
-	"item.occkawildmagic.mana_potion_2": "Зелье маны II"
+	"item.occkawildmagic.mana_potion_2": "Зелье маны II",
+	"item.occkawildmagic.dragon_potion_fire": "Зелье красного дракона",
+	"item.occkawildmagic.dragon_potion_ice": "Зелье белого дракона",
+	"item.occkawildmagic.dragon_potion_lightning": "Зелье синего дракона",
+	"item.occkawildmagic.dragon_potion_poison": "Зелье чёрного дракона",
+	"item.occkawildmagic.dragon_potion_thunder": "Зелье древнего дракона"
 }

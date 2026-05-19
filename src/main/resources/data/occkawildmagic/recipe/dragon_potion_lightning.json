@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:lightning_rod",
+        "minecraft:water_bucket",
+        "minecraft:glass_bottle"
+    ],
+    "result": {
+        "id": "occkawildmagic:dragon_potion_lightning",
+        "count": 1
+    }
+}

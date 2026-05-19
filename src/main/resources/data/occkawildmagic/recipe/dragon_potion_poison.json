@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:spider_eye",
+        "minecraft:milk_bucket",
+        "minecraft:glass_bottle"
+    ],
+    "result": {
+        "id": "occkawildmagic:dragon_potion_poison",
+        "count": 1
+    }
+}

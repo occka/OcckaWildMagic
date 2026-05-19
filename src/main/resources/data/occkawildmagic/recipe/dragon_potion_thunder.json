@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:echo_shard",
+        "minecraft:honey_bottle",
+        "minecraft:glass_bottle"
+    ],
+    "result": {
+        "id": "occkawildmagic:dragon_potion_thunder",
+        "count": 1
+    }
+}
