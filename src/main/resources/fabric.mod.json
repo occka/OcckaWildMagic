@@ -14,6 +14,9 @@
 	"license": "CC0-1.0",
 	"icon": "assets/occkawildmagic/icon.png",
 	"environment": "*",
+	"datapack": {
+		"description": "Occka Wild Magic data"
+	},
 	"entrypoints": {
 		"main": [
 			"wildmagic.OcckaWildMagic"
@@ -22,10 +25,10 @@
 			"wildmagic.client.OcckaWildMagicClient"
 		]
 	},
-"mixins": [
-    "occkawildmagic.mixins.json",
-    "occkawildmagic.client.mixins.json"
-],
+	"mixins": [
+		"occkawildmagic.mixins.json",
+		"occkawildmagic.client.mixins.json"
+	],
 	"depends": {
 		"fabricloader": ">=0.19.2",
 		"minecraft": "~26.1",

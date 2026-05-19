@@ -87,8 +87,8 @@ case 2 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, maxManaB
 	}
 
 	public String serialize() {
-		return (selectedClass == null ? "none" : selectedClass.id()) + ";" + level + ";" + exp + ";" + mana + ";" + maxMana + ";" + slotOneAbility + ";" + slotTwoAbility + ";" + slotThreeAbility;
-	}
+    return (selectedClass == null ? "none" : selectedClass.id()) + ";" + level + ";" + exp + ";" + mana + ";" + maxMana + ";" + maxManaBonus + ";" + slotOneAbility + ";" + slotTwoAbility + ";" + slotThreeAbility;
+}
 
 	public static PlayerClassData deserialize(String raw) {
 		if (raw == null || raw.isBlank()) {
@@ -109,15 +109,16 @@ case 2 -> new PlayerClassData(selectedClass, level, exp, mana, maxMana, maxManaB
 
 		try {
 			int level = ClassProgression.clampLevel(Integer.parseInt(parts[1]));
-			int maxMana = clazz.get().usesMana() ? ClassProgression.maxManaForLevel(level) : 0;
-			int mana = Math.clamp(Integer.parseInt(parts[3]), 0, maxMana);
-			return new PlayerClassData(
+int maxMana = clazz.get().usesMana() ? ClassProgression.maxManaForLevel(level) : 0;
+int maxManaBonus = parts.length > 5 ? Integer.parseInt(parts[5]) : 0;
+int mana = Math.clamp(Integer.parseInt(parts[3]), 0, maxMana + maxManaBonus);
+return new PlayerClassData(
     clazz.get(), level,
     Integer.parseInt(parts[2]),
-    mana, maxMana, 0,
-    parts.length > 5 ? parts[5] : "",
+    mana, maxMana, maxManaBonus,
     parts.length > 6 ? parts[6] : "",
-    parts.length > 7 ? parts[7] : ""
+    parts.length > 7 ? parts[7] : "",
+    parts.length > 8 ? parts[8] : ""
 );
 		} catch (NumberFormatException ignored) {
 			return EMPTY;

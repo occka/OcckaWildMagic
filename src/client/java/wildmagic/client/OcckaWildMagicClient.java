@@ -116,7 +116,7 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 			int manaX = abilityX;
 			int manaY = abilityY - 10;
 			int manaWidth = 70;
-			float manaProgress = data.effectiveMaxMana() <= 0 ? 0.0F : Math.clamp(data.mana() / (float) data.effectiveMaxMana(), 0.0F, 1.0F);
+			float manaProgress = data.effectiveMaxMana() <= 0 ? 0.0F : (float) data.mana() / (float) data.effectiveMaxMana();
 			graphics.fill(manaX, manaY, manaX + manaWidth, manaY + 5, 0xAA071225);
 			graphics.fill(manaX, manaY, manaX + Math.round(manaWidth * manaProgress), manaY + 5, 0xFF2AA7FF);
 			drawCentered(graphics, client, Component.literal(data.mana() + "/" + data.effectiveMaxMana()), manaX + (manaWidth / 2), manaY - 9, 0xFF55D8FF);

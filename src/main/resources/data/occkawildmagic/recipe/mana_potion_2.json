@@ -1,0 +1,17 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+        "GDG",
+        "DPD",
+        "GDG"
+    ],
+    "key": {
+        "G": "minecraft:ghast_tear",
+        "D": "minecraft:diamond",
+        "P": "occkawildmagic:mana_potion"
+    },
+    "result": {
+        "id": "occkawildmagic:mana_potion_2",
+        "count": 1
+    }
+}
