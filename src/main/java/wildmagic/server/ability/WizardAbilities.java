@@ -336,7 +336,10 @@ public final class WizardAbilities {
 			Vec3 pos = display.position().add(0.0D, -1.2D, 0.0D);
 			Vec3 next = pos.add(0.0D, -1.25D, 0.0D);
 			display.setPos(next.x, next.y, next.z);
-			boolean hit = next.y <= level.getMinY() + 2 || blockHitPosition(level, owner, next, next.add(0.0D, -1.8D, 0.0D)) != null;
+			BlockPos below = BlockPos.containing(next.x, next.y - 1.35D, next.z);
+			boolean hit = next.y <= level.getMinY() + 2
+					|| level.getBlockState(below).isSolid()
+					|| blockHitPosition(level, owner, next, next.add(0.0D, -1.8D, 0.0D)) != null;
 			spawnMeteorTrail(level, pos);
 			if (hit) {
 				display.discard();
@@ -367,10 +370,11 @@ public final class WizardAbilities {
 			return;
 		}
 		display.setBlockState(Blocks.MAGMA_BLOCK.defaultBlockState());
-		display.setTransformation(new Transformation(new Vector3f(), new org.joml.Quaternionf(), new Vector3f(2.0F, 2.0F, 2.0F), new org.joml.Quaternionf()));
+		display.setTransformation(new Transformation(new Vector3f(-0.5F, -0.5F, -0.5F), new org.joml.Quaternionf(), new Vector3f(2.0F, 2.0F, 2.0F), new org.joml.Quaternionf()));
+		display.setViewRange(128.0F);
 		display.setPos(x, y, z);
 		level.addFreshEntity(display);
-		METEORS.add(new Meteor(owner.getUUID(), display.getUUID(), new Vec3(x, y, z), 80));
+		METEORS.add(new Meteor(owner.getUUID(), display.getUUID(), new Vec3(x, y, z), 220));
 		level.playSound(null, x, y, z,
 				net.minecraft.sounds.SoundEvents.FIRECHARGE_USE,
 				net.minecraft.sounds.SoundSource.PLAYERS,
