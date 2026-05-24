@@ -53,7 +53,7 @@ public final class WizardAbilities {
 	}
 
 	public static boolean useMagicMissile(ServerPlayer player) {
-		List<LivingEntity> targets = findConeTargets(player, 25.0D, 0.82D);
+		List<LivingEntity> targets = findConeTargets(player, 25.0D, 0.72D);
 		if (targets.isEmpty()) {
 			player.sendSystemMessage(Component.literal("Цель не найдена"));
 			return false;
@@ -71,12 +71,13 @@ public final class WizardAbilities {
 
 		for (int i = 0; i < count; i++) {
 			LivingEntity target = targets.get(i % targets.size());
-			double offset = (i - ((count - 1) / 2.0D)) * 0.45D;
-			Vec3 start = player.getEyePosition().add(look.scale(0.8D)).add(right.scale(offset));
+			double offset = (i - ((count - 1) / 2.0D)) * 0.52D;
+			Vec3 start = player.getEyePosition().add(look.scale(0.9D)).add(right.scale(offset)).add(up.scale(0.12D * (i % 2)));
+			double arcHeight = 1.6D + (i % 3) * 0.5D;
 			Vec3 control = start
-					.add(look.scale(4.0D + (i % 3)))
-					.add(up.scale(1.4D + (i % 2) * 0.45D))
-					.add(right.scale(offset * 2.2D));
+					.add(look.scale(3.6D + (i % 3) * 0.7D))
+					.add(up.scale(arcHeight))
+					.add(right.scale(offset * 2.6D));
 			MAGIC_MISSILES.add(new MagicMissile(player.getUUID(), target.getUUID(), start, control, start, 0, 22 + (i % 3) * 2));
 		}
 
@@ -365,12 +366,14 @@ public final class WizardAbilities {
 		List<UUID> ids = new ArrayList<>();
 		for (int dx = 0; dx <= 1; dx++) {
 			for (int dz = 0; dz <= 1; dz++) {
-				BlockPos pos = BlockPos.containing(x + dx - 0.5D, y, z + dz - 0.5D);
-				FallingBlockEntity entity = FallingBlockEntity.fall(level, pos, Blocks.MAGMA_BLOCK.defaultBlockState());
-				entity.disableDrop();
-				entity.setHurtsEntities(0.0F, 0);
-				entity.setDeltaMovement(0.0D, -1.35D, 0.0D);
-				ids.add(entity.getUUID());
+				for (int dy = 0; dy <= 1; dy++) {
+					BlockPos pos = BlockPos.containing(x + dx - 0.5D, y + dy, z + dz - 0.5D);
+					FallingBlockEntity entity = FallingBlockEntity.fall(level, pos, Blocks.MAGMA_BLOCK.defaultBlockState());
+					entity.disableDrop();
+					entity.setHurtsEntities(0.0F, 0);
+					entity.setDeltaMovement(0.0D, -1.35D, 0.0D);
+					ids.add(entity.getUUID());
+				}
 			}
 		}
 		METEORS.add(new Meteor(owner.getUUID(), List.copyOf(ids), new Vec3(x, y, z), 80));
@@ -536,14 +539,14 @@ public final class WizardAbilities {
 		AABB area = new AABB(center.x - 7.0D, center.y - 7.0D, center.z - 7.0D, center.x + 7.0D, center.y + 7.0D, center.z + 7.0D);
 		for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, area, e -> e != owner && e.isAlive() && !isFriendly(owner, e))) {
 			if (entity.position().distanceTo(center) <= 7.0D) {
-				float damage = 25.0F + owner.getRandom().nextFloat() * 15.0F;
+				float damage = 10.0F;
 				entity.hurtServer(level, owner.damageSources().onFire(), damage);
 				entity.igniteForSeconds(8);
 			}
 		}
 		level.explode(owner, center.x, center.y, center.z, 7.0F, true, Level.ExplosionInteraction.TNT);
 		igniteArea(level, center, 7);
-		level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, center.x, center.y, center.z, 2, 0.0D, 0.0D, 0.0D, 0.0D);
+		level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, center.x, center.y, center.z, 5, 1.2D, 0.8D, 1.2D, 0.0D);
 		level.sendParticles(ParticleTypes.FLAME, center.x, center.y + 1.0D, center.z, 160, 4.5D, 2.2D, 4.5D, 0.14D);
 		level.sendParticles(ParticleTypes.LAVA, center.x, center.y + 1.0D, center.z, 45, 3.2D, 1.7D, 3.2D, 0.0D);
 		level.playSound(null, center.x, center.y, center.z,
@@ -566,9 +569,9 @@ public final class WizardAbilities {
 	}
 
 	private static void spawnMeteorTrail(ServerLevel level, Vec3 pos) {
-		level.sendParticles(ParticleTypes.FLAME, pos.x, pos.y, pos.z, 60, 1.25D, 1.0D, 1.25D, 0.12D);
-		level.sendParticles(ParticleTypes.LAVA, pos.x, pos.y, pos.z, 10, 0.9D, 0.9D, 0.9D, 0.0D);
-		level.sendParticles(ParticleTypes.LARGE_SMOKE, pos.x, pos.y + 0.7D, pos.z, 24, 1.4D, 1.2D, 1.4D, 0.05D);
+		level.sendParticles(ParticleTypes.FLAME, pos.x, pos.y, pos.z, 90, 1.35D, 1.1D, 1.35D, 0.14D);
+		level.sendParticles(ParticleTypes.LAVA, pos.x, pos.y, pos.z, 22, 1.1D, 1.0D, 1.1D, 0.0D);
+		level.sendParticles(ParticleTypes.LARGE_SMOKE, pos.x, pos.y + 0.7D, pos.z, 36, 1.6D, 1.3D, 1.6D, 0.06D);
 		level.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, pos.x, pos.y + 1.0D, pos.z, 8, 1.5D, 1.0D, 1.5D, 0.02D);
 	}
 

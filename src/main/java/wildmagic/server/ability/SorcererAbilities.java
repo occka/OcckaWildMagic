@@ -373,37 +373,25 @@ public static void consumeSilentSpell(ServerPlayer player) {
     public static boolean useElementalDash(ServerPlayer player) {
         ServerLevel level = player.level();
         SorcererElement element = WildMagicServerState.get(player).sorcererElementEnum();
-        Vec3 start = player.position();
         Vec3 look = player.getLookAngle().normalize();
-        Vec3 horizontal = new Vec3(look.x, 0.0D, look.z);
-        if (horizontal.lengthSqr() < 0.001D) {
-            horizontal = look;
+        Vec3 direction = new Vec3(look.x, 0.0D, look.z);
+        if (direction.lengthSqr() < 0.001D) {
+            direction = look;
         }
-        horizontal = horizontal.normalize();
+        direction = direction.normalize();
 
-        Vec3 target = start;
-        List<Vec3> trail = new ArrayList<>();
-        for (int i = 1; i <= 10; i++) {
-            Vec3 step = start.add(horizontal.scale(i));
-            if (!isSafePlayerPosition(level, step)) {
-                break;
-            }
-            target = step;
-            trail.add(step);
+        Vec3 start = player.position();
+        for (int i = 1; i <= 6; i++) {
+            Vec3 point = start.add(direction.scale(i));
+            applyDashTrail(player, level, element, point, i == 6);
         }
 
-        if (target.distanceTo(start) < 0.5D) {
-            return false;
-        }
-
-        for (Vec3 point : trail) {
-            applyDashTrail(player, level, element, point, false);
-        }
-
-        player.teleportTo(target.x, target.y, target.z);
+        Vec3 currentVelocity = player.getDeltaMovement();
+        Vec3 dashVelocity = direction.scale(2.35D).add(0.0D, Math.max(0.1D, currentVelocity.y), 0.0D);
+        player.setDeltaMovement(dashVelocity);
+        player.hurtMarked = true;
         player.fallDistance = 0.0F;
-        applyDashTrail(player, level, element, target, true);
-        playElementSound(level, target.x, target.y, target.z, element);
+        playElementSound(level, player.getX(), player.getY(), player.getZ(), element);
         return true;
     }
 
