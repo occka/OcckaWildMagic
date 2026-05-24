@@ -12,7 +12,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.joml.Vector3f;
+import com.mojang.math.Transformation;
 
 public final class WizardAbilities {
 	private static final List<WizardProjectile> PROJECTILES = new CopyOnWriteArrayList<>();
@@ -323,31 +325,28 @@ public final class WizardAbilities {
 			}
 
 			ServerLevel level = owner.level();
-			List<FallingBlockEntity> entities = findFallingBlocks(level, meteor.entityIds());
-			if (entities.isEmpty() || meteor.remainingTicks() <= 0) {
+			Display.BlockDisplay display = findMeteorDisplay(level, meteor.entityId());
+			if (display == null || meteor.remainingTicks() <= 0) {
 				explodeMeteor(level, owner, meteor.lastPosition());
+				if (display != null) display.discard();
 				METEORS.remove(meteor);
 				continue;
 			}
 
-			Vec3 pos = averagePosition(entities);
-			boolean hit = false;
-			for (FallingBlockEntity entity : entities) {
-				entity.setDeltaMovement(0.0D, -1.35D, 0.0D);
-				hit = hit || entity.onGround() || blockHitPosition(level, owner, entity.position(), entity.position().add(0.0D, -1.6D, 0.0D)) != null;
-			}
+			Vec3 pos = display.position().add(0.0D, -1.2D, 0.0D);
+			Vec3 next = pos.add(0.0D, -1.25D, 0.0D);
+			display.setPos(next.x, next.y, next.z);
+			boolean hit = next.y <= level.getMinY() + 2 || blockHitPosition(level, owner, next, next.add(0.0D, -1.8D, 0.0D)) != null;
 			spawnMeteorTrail(level, pos);
 			if (hit) {
-				for (FallingBlockEntity entity : entities) {
-					entity.discard();
-				}
+				display.discard();
 				explodeMeteor(level, owner, pos);
 				METEORS.remove(meteor);
 				continue;
 			}
 
 			METEORS.remove(meteor);
-			METEORS.add(new Meteor(meteor.ownerId(), meteor.entityIds(), pos, meteor.remainingTicks() - 1));
+			METEORS.add(new Meteor(meteor.ownerId(), meteor.entityId(), next, meteor.remainingTicks() - 1));
 		}
 	}
 
@@ -363,20 +362,15 @@ public final class WizardAbilities {
 		double x = center.x + Math.cos(angle) * distance;
 		double z = center.z + Math.sin(angle) * distance;
 		double y = Math.min(level.getMaxY() - 4.0D, Math.max(center.y + 28.0D, level.getMaxY() - 12.0D));
-		List<UUID> ids = new ArrayList<>();
-		for (int dx = 0; dx <= 1; dx++) {
-			for (int dz = 0; dz <= 1; dz++) {
-				for (int dy = 0; dy <= 1; dy++) {
-					BlockPos pos = BlockPos.containing(x + dx - 0.5D, y + dy, z + dz - 0.5D);
-					FallingBlockEntity entity = FallingBlockEntity.fall(level, pos, Blocks.MAGMA_BLOCK.defaultBlockState());
-					entity.disableDrop();
-					entity.setHurtsEntities(0.0F, 0);
-					entity.setDeltaMovement(0.0D, -1.35D, 0.0D);
-					ids.add(entity.getUUID());
-				}
-			}
+		Display.BlockDisplay display = EntityType.BLOCK_DISPLAY.create(level, EntitySpawnReason.TRIGGERED);
+		if (display == null) {
+			return;
 		}
-		METEORS.add(new Meteor(owner.getUUID(), List.copyOf(ids), new Vec3(x, y, z), 80));
+		display.setBlockState(Blocks.MAGMA_BLOCK.defaultBlockState());
+		display.setTransformation(new Transformation(new Vector3f(), new org.joml.Quaternionf(), new Vector3f(2.0F, 2.0F, 2.0F), new org.joml.Quaternionf()));
+		display.setPos(x, y, z);
+		level.addFreshEntity(display);
+		METEORS.add(new Meteor(owner.getUUID(), display.getUUID(), new Vec3(x, y, z), 80));
 		level.playSound(null, x, y, z,
 				net.minecraft.sounds.SoundEvents.FIRECHARGE_USE,
 				net.minecraft.sounds.SoundSource.PLAYERS,
@@ -451,14 +445,11 @@ public final class WizardAbilities {
 		return level.getEntityInAnyDimension(id) instanceof LivingEntity entity ? entity : null;
 	}
 
-	private static List<FallingBlockEntity> findFallingBlocks(ServerLevel level, List<UUID> ids) {
-		List<FallingBlockEntity> result = new ArrayList<>();
-		for (UUID id : ids) {
-			if (level.getEntityInAnyDimension(id) instanceof FallingBlockEntity entity && entity.isAlive()) {
-				result.add(entity);
-			}
+	private static Display.BlockDisplay findMeteorDisplay(ServerLevel level, UUID id) {
+		if (level.getEntityInAnyDimension(id) instanceof Display.BlockDisplay display && display.isAlive()) {
+			return display;
 		}
-		return result;
+		return null;
 	}
 
 	private static boolean hasLineOfSight(ServerLevel level, ServerPlayer owner, Vec3 start, Vec3 end) {
@@ -560,13 +551,6 @@ public final class WizardAbilities {
 		return start.scale(inv * inv).add(control.scale(2.0D * inv * t)).add(end.scale(t * t));
 	}
 
-	private static Vec3 averagePosition(List<FallingBlockEntity> entities) {
-		Vec3 sum = Vec3.ZERO;
-		for (FallingBlockEntity entity : entities) {
-			sum = sum.add(entity.position());
-		}
-		return sum.scale(1.0D / entities.size());
-	}
 
 	private static void spawnMeteorTrail(ServerLevel level, Vec3 pos) {
 		level.sendParticles(ParticleTypes.FLAME, pos.x, pos.y, pos.z, 90, 1.35D, 1.1D, 1.35D, 0.14D);
@@ -673,6 +657,6 @@ public final class WizardAbilities {
 	private record MeteorShower(UUID ownerId, Vec3 center, long expireTick, int remainingMeteors, long nextMeteorTick) {
 	}
 
-	private record Meteor(UUID ownerId, List<UUID> entityIds, Vec3 lastPosition, int remainingTicks) {
+	private record Meteor(UUID ownerId, UUID entityId, Vec3 lastPosition, int remainingTicks) {
 	}
 }
