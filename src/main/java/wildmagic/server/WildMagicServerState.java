@@ -176,9 +176,13 @@ public final class WildMagicServerState {
 			return;
 		}
 		if (WildMagicZones.isInSilenceZone(player) && ability.manaCost() > 0) {
-			player.sendSystemMessage(Component.literal("Тишина: заклинания недоступны"));
-			return;
-		}
+    if (wildmagic.server.ability.SorcererAbilities.isSilentSpellActive(player)) {
+        wildmagic.server.ability.SorcererAbilities.consumeSilentSpell(player);
+    } else {
+        player.sendSystemMessage(Component.literal("Тишина: заклинания недоступны"));
+        return;
+    }
+}
 		if (!ability.id().equals("bard_invisibility")) {
 			WildMagicZones.breakInvisibility(player);
 		}
@@ -190,11 +194,12 @@ public final class WildMagicServerState {
 			case "bard_heroism" -> BardAbilities.useBardHeroism(player);
 			case "bard_invisibility" -> BardAbilities.useBardInvisibility(player);
 			case "sorcerer_dragon_breath" -> wildmagic.server.ability.SorcererAbilities.useDragonBreath(player);
+case "sorcerer_elemental_dash" -> wildmagic.server.ability.SorcererAbilities.useElementalDash(player);
+case "sorcerer_storm_jump" -> wildmagic.server.ability.SorcererAbilities.useStormJump(player);
 case "sorcerer_elemental_burst" -> wildmagic.server.ability.SorcererAbilities.useElementalBurst(player);
 case "sorcerer_draconic_wings" -> wildmagic.server.ability.SorcererAbilities.useDraconicWings(player);
 case "sorcerer_metamagic" -> wildmagic.server.ability.SorcererAbilities.useMetamagic(player);
-case "sorcerer_twinned_spell" -> wildmagic.server.ability.SorcererAbilities.useTwinnedSpell(player);
-case "sorcerer_quicken_spell" -> wildmagic.server.ability.SorcererAbilities.useQuickenSpell(player);
+case "sorcerer_silent_spell" -> wildmagic.server.ability.SorcererAbilities.useSilentSpell(player);
 case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWildSurge(player);
 			case "bard_dispel" -> BardAbilities.useBardDispel(player);
 			case "bard_slow_zone" -> BardAbilities.useBardSlowZone(player);
@@ -206,6 +211,11 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 			case "bard_shatter" -> BardAbilities.useBardShatter(player);
 			case "bard_misty_step" -> BardAbilities.useBardMistyStep(player);
 			case "bard_hypnotic_pattern" -> BardAbilities.useBardHypnoticPattern(player);
+			case "sorcerer_leap"        -> wildmagic.server.ability.SorcererAbilities.useLeap(player);
+    case "sorcerer_ice_dagger"  -> wildmagic.server.ability.SorcererAbilities.useIceDagger(player);
+    case "sorcerer_pseudo_life" -> wildmagic.server.ability.SorcererAbilities.usePseudoLife(player);
+    case "sorcerer_repair"      -> wildmagic.server.ability.SorcererAbilities.useRepair(player);
+    case "sorcerer_mage_armor"  -> wildmagic.server.ability.SorcererAbilities.useMageArmor(player);
 			case "bard_word_of_power" -> BardAbilities.useBardWordOfPower(player);
 			case "bard_dominate" -> BardAbilities.useBardDominate(player);
 			case "bard_silence" -> BardAbilities.useBardSilence(player);
@@ -228,16 +238,31 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 			case "warlock_breakthrough" -> wildmagic.server.ability.WarlockAbilities.useBreakthrough(player);
 			case "warlock_power_word_death" -> wildmagic.server.ability.WarlockAbilities.usePowerWordDeath(player);
 			case "wizard_fire_bolt" -> wildmagic.server.ability.WizardAbilities.useFireBolt(player);
+			case "wizard_magic_missile" -> wildmagic.server.ability.WizardAbilities.useMagicMissile(player);
 			case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(player);
+			case "wizard_gravity_well" -> wildmagic.server.ability.WizardAbilities.useGravityWell(player);
+			case "wizard_chain_lightning" -> wildmagic.server.ability.WizardAbilities.useChainLightning(player);
+			case "wizard_meteor_shower" -> wildmagic.server.ability.WizardAbilities.useMeteorShower(player);
 			default -> usePlaceholderAbility(player, ability);
 		};
 		if (!used) {
 			return;
 		}
-		PlayerClassData updated = get(player).consumeMana(ClassProgression.effectiveManaCost(ability, current));
-		PLAYER_DATA.put(player.getUUID(), updated);
-		setCooldown(player, slot, ClassProgression.effectiveCooldownSeconds(ability, updated));
-		sync(player);
+		 if (!used) return;
+ 
+    int actualManaCost = ClassProgression.effectiveManaCost(ability, current);
+    // Метамагия делает следующее заклинание бесплатным (не саму метамагию)
+    if (actualManaCost > 0
+            && !ability.id().equals("sorcerer_metamagic")
+            && wildmagic.server.ability.SorcererAbilities.isMetamagicActive(player)) {
+        wildmagic.server.ability.SorcererAbilities.consumeMetamagic(player);
+        actualManaCost = 0;
+    }
+ 
+    PlayerClassData updated = get(player).consumeMana(actualManaCost);
+    PLAYER_DATA.put(player.getUUID(), updated);
+    setCooldown(player, slot, ClassProgression.effectiveCooldownSeconds(ability, updated));
+    sync(player);
 	}
 
 	public static boolean isCharmed(LivingEntity attacker, Player target) {
@@ -409,6 +434,9 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 	private static void tickPlayers(MinecraftServer server) {
 		wildmagic.server.ability.WizardAbilities.tickProjectiles(server);
 		wildmagic.server.ability.WarlockAbilities.tick(server);
+		wildmagic.server.ability.SorcererAbilities.tickWings(server);
+		wildmagic.server.ability.SorcererAbilities.tickStormJumps(server);
+		wildmagic.server.ability.SorcererAbilities.tickIceDaggers(server);
 		if (server.getTickCount() % 20 != 0) {
 			return;
 		}
@@ -435,15 +463,17 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 		BardAbilities.tickDominate(server);
 		BardAbilities.tickForceCage(server);
 		BardAbilities.tickMordenkainenSword(server);
-		wildmagic.server.ability.SorcererAbilities.tickWings(server);
 		BardAbilities.tickHypnoticPattern(server);
 		WildMagicZones.tickInvisibility(server);
 		WildMagicZones.tickSilence(server);
 		WildMagicZones.tickCharmed(currentServer);
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-			applyClassPassives(player);
-			regenerateMana(player);
-		}
+    applyClassPassives(player);
+    regenerateMana(player);
+    wildmagic.server.ability.SorcererAbilities.tickPassives(player);
+}
+
+	
 	}
 
 	private static void regenerateMana(ServerPlayer player) {
@@ -455,6 +485,7 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 		PLAYER_DATA.put(player.getUUID(), updated);
 		sync(player);
 	}
+	
 
 	public static void fillMana(ServerPlayer player) {
 		PlayerClassData current = get(player);

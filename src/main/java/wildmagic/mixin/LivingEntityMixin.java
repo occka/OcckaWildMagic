@@ -157,4 +157,27 @@ public class LivingEntityMixin {
             SWORD_PROCESSING.set(false);
         }
     }
+
+    @Inject(method = "hurtServer", at = @At("RETURN"))
+    private void occkaWildMagic$sorcererIceRetaliate(
+            net.minecraft.server.level.ServerLevel level,
+            net.minecraft.world.damagesource.DamageSource source,
+            float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue() || amount <= 0.0F) return;
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (!(self instanceof net.minecraft.server.level.ServerPlayer victim)) return;
+        if (!(source.getEntity() instanceof LivingEntity attacker)) return;
+        wildmagic.server.ability.SorcererAbilities.onSorcererHit(victim, attacker);
+    }
+
+   @Inject(method = "hurtServer", at = @At("RETURN"))
+    private void occkaWildMagic$sorcererPoisonAttack(
+            net.minecraft.server.level.ServerLevel level,
+            net.minecraft.world.damagesource.DamageSource source,
+            float amount, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue() || amount <= 0.0F) return;
+        if (!(source.getEntity() instanceof net.minecraft.server.level.ServerPlayer attacker)) return;
+        LivingEntity self = (LivingEntity) (Object) this;
+        wildmagic.server.ability.SorcererAbilities.onSorcererAttack(attacker, self);
+    }
 }
