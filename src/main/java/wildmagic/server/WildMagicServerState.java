@@ -9,6 +9,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -295,6 +296,13 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 
 	public static boolean isFriendlySummonedUndead(LivingEntity attacker, LivingEntity target) {
 		return wildmagic.server.ability.WarlockAbilities.isSummonedUndeadFriendly(attacker, target);
+	}
+
+	public static boolean areTeammates(Entity first, Entity second) {
+		if (first == null || second == null) {
+			return false;
+		}
+		return first.isAlliedTo(second);
 	}
 
 	public static boolean isDeadOne(ServerPlayer player) {
