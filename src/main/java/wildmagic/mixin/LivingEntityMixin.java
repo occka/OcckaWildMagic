@@ -41,7 +41,17 @@ public class LivingEntityMixin {
         }
     }
 
+    
     @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
+    private void occkaWildMagic$sorcererShieldBlock(net.minecraft.server.level.ServerLevel level, DamageSource source,
+            float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (!(self instanceof net.minecraft.server.level.ServerPlayer player)) return;
+        if (wildmagic.server.ability.SorcererAbilities.consumeShield(player)) {
+            cir.setReturnValue(false);
+        }
+    }
+@Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
     private void occkaWildMagic$checkDeadOneImmunities(net.minecraft.server.level.ServerLevel level,
             DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity) (Object) this;

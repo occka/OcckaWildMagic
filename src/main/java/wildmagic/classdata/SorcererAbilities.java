@@ -23,6 +23,7 @@ public final class SorcererAbilities {
                         "Рывок на 10 блоков вперёд. Дополнительный эффект зависит от выбранной стихии. 30 маны.", 2, 0, 30),
                 new AbilityDefinition("sorcerer_ice_dagger", "Ледяной кинжал",
                         "Снаряд: 2-6 урона и замедление III на 4с при попадании. 25 маны.", 2, 0, 25),
+                new AbilityDefinition("sorcerer_gust", "Порыв ветра", "Выпускает порыв ветра вперёд.", 2, 0, 20),
                 new AbilityDefinition("sorcerer_pseudo_life", "Псевдожизнь",
                         "2 полоски поглощения на 2 минуты. 100 маны.", 2, 0, 100),
                 new AbilityDefinition("bard_misty_step", "Туманный шаг",
@@ -31,6 +32,7 @@ public final class SorcererAbilities {
                         "Волна 3x3 летит на 6 блоков, наносит 4-10 урона и отталкивает цели.", 2, 0, 50),
 
                 // Lv3
+                new AbilityDefinition("sorcerer_fire_palms", "Огненные ладони", "30с: атаки поджигают цель на 2с.", 3, 0, 100),
                 new AbilityDefinition("sorcerer_repair", "Починка",
                         "Чинит броню на игроке и предмет в руках на 20 прочности. 120 маны.", 3, 0, 120),
                 new AbilityDefinition("sorcerer_mage_armor", "Доспехи мага", "+2 брони на 30 секунд. 120 маны.", 3, 0,
@@ -41,6 +43,7 @@ public final class SorcererAbilities {
                         50),
                 new AbilityDefinition("warlock_poison_spray", "Ядовитые брызги",
                         "Конус зелёных брызг до 5 блоков: отравление 10с и 5 физ. урона.", 3, 0, 40),
+                new AbilityDefinition("sorcerer_web", "Паутина", "Куб 5x5x5 из паутины на 20с, не заменяет твёрдые блоки.", 4, 0, 60),
                 new AbilityDefinition("sorcerer_silent_spell", "Молчаливое заклинание", "Следующее заклинание можно использовать в зоне тишины. 40 маны.", 4, 0, 40),
 
                 // Lv5
@@ -56,6 +59,7 @@ public final class SorcererAbilities {
                 // Lv6
                 new AbilityDefinition("sorcerer_storm_jump", "Грозовой прыжок",
                         "Взлёт на 25 блоков и управляемое падение. При приземлении 8-15 урона и эффект выбранной стихии. 55 маны.", 6, 0, 55),
+                new AbilityDefinition("sorcerer_shield", "Щит", "Блокирует следующий входящий урон полностью.", 6, 0, 140),
                 new AbilityDefinition("bard_slow_zone", "Замедление",
                         "Создаёт зону 4x4x4 с замедлением, слабостью и усталостью на 15с.", 6, 0, 130),
                 new AbilityDefinition("bard_greater_invisibility", "Высшая невидимость",
@@ -70,7 +74,11 @@ public final class SorcererAbilities {
                 new AbilityDefinition("bard_heat_metal", "Раскалённый металл",
                         "2-12 урона огнём цели в броне medium/heavy, поджигает.", 7, 0, 40),
 
+                // Lv8
+                new AbilityDefinition("sorcerer_sunbeam", "Солнечный луч", "6с луч 30 блоков: каждую секунду наносит 2 маг. урона и поджигает.", 8, 0, 140),
+
                 // Lv9
+                new AbilityDefinition("sorcerer_disintegrate", "Распад", "Тонкий зелёный луч 25 блоков: самоурон 5-12 и 40% прочности брони цели.", 9, 0, 160),
                 new AbilityDefinition("sorcerer_wild_surge", "Дикий выброс",
                         "Случайный мощный эффект — может быть как полезным так и вредным. КД 300с.", 9, 300, 0),
 
