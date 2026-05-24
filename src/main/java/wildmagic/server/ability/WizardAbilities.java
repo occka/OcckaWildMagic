@@ -38,6 +38,8 @@ public final class WizardAbilities {
 	private static final List<GravityWell> GRAVITY_WELLS = new CopyOnWriteArrayList<>();
 	private static final List<MeteorShower> METEOR_SHOWERS = new CopyOnWriteArrayList<>();
 	private static final List<Meteor> METEORS = new CopyOnWriteArrayList<>();
+	private static final List<TelekinesisState> TELEKINESIS = new CopyOnWriteArrayList<>();
+	private static final List<WizardPassiveCooldown> PASSIVE_COOLDOWNS = new CopyOnWriteArrayList<>();
 
 	private WizardAbilities() {
 	}
@@ -150,6 +152,26 @@ public final class WizardAbilities {
 		return true;
 	}
 
+
+	public static boolean useTelekinesis(ServerPlayer player) {
+		ServerLevel level = player.level();
+		int maxTargets = WildMagicServerState.get(player).level() >= 10 ? 3 : 1;
+		List<LivingEntity> targets = findConeTargets(player, 25.0D, 0.9D);
+		if (targets.isEmpty()) {
+			player.sendSystemMessage(Component.literal("Цель не найдена"));
+			return false;
+		}
+		int added = 0;
+		for (LivingEntity target : targets) {
+			if (added >= maxTargets) break;
+			target.setDeltaMovement(target.getDeltaMovement().add(0.0D, 0.35D, 0.0D));
+			target.hurtMarked = true;
+			TELEKINESIS.add(new TelekinesisState(player.getUUID(), target.getUUID(), level.getGameTime() + 6 * 20L));
+			added++;
+		}
+		return added > 0;
+	}
+
 	public static boolean useMeteorShower(ServerPlayer player) {
 		ServerLevel level = player.level();
 		Vec3 center = raycastBlock(player, 60.0D);
@@ -170,6 +192,7 @@ public final class WizardAbilities {
 		tickGravityWells(server);
 		tickMeteorShowers(server);
 		tickMeteors(server);
+		tickTelekinesis(server);
 	}
 
 	private static void tickFireProjectiles(MinecraftServer server) {
@@ -352,6 +375,57 @@ public final class WizardAbilities {
 			METEORS.add(new Meteor(meteor.ownerId(), meteor.entityId(), next, meteor.remainingTicks() - 1));
 		}
 	}
+
+
+	private static void tickTelekinesis(MinecraftServer server) {
+		Iterator<TelekinesisState> it = TELEKINESIS.iterator();
+		while (it.hasNext()) {
+			TelekinesisState state = it.next();
+			ServerPlayer owner = server.getPlayerList().getPlayer(state.ownerId());
+			if (owner == null || !owner.isAlive()) { TELEKINESIS.remove(state); continue; }
+			ServerLevel level = owner.level();
+			LivingEntity target = findEntity(level, state.targetId());
+			if (target == null || !target.isAlive() || level.getGameTime() > state.expireTick()) { TELEKINESIS.remove(state); continue; }
+			Vec3 look = owner.getLookAngle().normalize();
+			Vec3 desired = owner.getEyePosition().add(look.scale(6.0D));
+			Vec3 diff = desired.subtract(target.position());
+			Vec3 push = new Vec3(diff.x, 0.0D, diff.z).scale(0.18D);
+			target.setDeltaMovement(push.x, Math.max(0.08D, target.getDeltaMovement().y * 0.7D), push.z);
+			target.hurtMarked = true;
+			level.sendParticles(ParticleTypes.WITCH, target.getX(), target.getY() + target.getBbHeight() * 0.6D, target.getZ(), 8, 0.2D, 0.2D, 0.2D, 0.02D);
+			drawTelekinesisBeam(level, owner.getEyePosition(), target.getEyePosition());
+			if (owner.isShiftKeyDown()) {
+				Vec3 throwVec = owner.getLookAngle().normalize().scale(2.1D).add(0.0D, 0.35D, 0.0D);
+				target.setDeltaMovement(throwVec);
+				target.hurtMarked = true;
+				TELEKINESIS.remove(state);
+			}
+		}
+	}
+
+	private static void drawTelekinesisBeam(ServerLevel level, Vec3 from, Vec3 to) {
+		Vec3 delta = to.subtract(from);
+		int steps = Math.max(6, (int) (delta.length() * 3.0D));
+		for (int i = 0; i <= steps; i++) {
+			Vec3 p = from.add(delta.scale(i / (double) steps));
+			level.sendParticles(ParticleTypes.WITCH, p.x, p.y, p.z, 1, 0.03D, 0.03D, 0.03D, 0.0D);
+		}
+	}
+
+	public static void tickCarefulMage(ServerPlayer player) {
+		if (WildMagicServerState.get(player).level() < 5) return;
+		long now = player.level().getGameTime();
+		WizardPassiveCooldown cd = PASSIVE_COOLDOWNS.stream().filter(c -> c.playerId().equals(player.getUUID())).findFirst().orElse(null);
+		if (cd != null && now < cd.nextAllowedTick()) return;
+		int manaCost = 50;
+		var data = WildMagicServerState.get(player);
+		if (player.fallDistance > 12.0F && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 15*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
+		if (player.isOnFire() && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 15*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
+		if (player.isInWater() && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.WATER_BREATHING, 30*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
+		if (player.level().getSkyDarken() >= 8 && player.level().canSeeSky(BlockPos.containing(player.position())) && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 60*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
+		if (player.hurtTime > 0 && data.mana() >= 60) { player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 15*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, 60); setPassiveCd(player, now); }
+	}
+	private static void setPassiveCd(ServerPlayer player, long now){ PASSIVE_COOLDOWNS.removeIf(c->c.playerId().equals(player.getUUID())); PASSIVE_COOLDOWNS.add(new WizardPassiveCooldown(player.getUUID(), now + 60*20L)); }
 
 	private static void spawnProjectile(ServerPlayer player, WizardProjectile.Kind kind, double speed, int remainingTicks, float minDamage, float maxDamage) {
 		Vec3 direction = player.getLookAngle().normalize();
@@ -663,4 +737,6 @@ public final class WizardAbilities {
 
 	private record Meteor(UUID ownerId, UUID entityId, Vec3 lastPosition, int remainingTicks) {
 	}
+	private record TelekinesisState(UUID ownerId, UUID targetId, long expireTick) {}
+	private record WizardPassiveCooldown(UUID playerId, long nextAllowedTick) {}
 }

@@ -243,6 +243,7 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 			case "wizard_fireball" -> wildmagic.server.ability.WizardAbilities.useFireball(player);
 			case "wizard_gravity_well" -> wildmagic.server.ability.WizardAbilities.useGravityWell(player);
 			case "wizard_chain_lightning" -> wildmagic.server.ability.WizardAbilities.useChainLightning(player);
+			case "wizard_telekinesis" -> wildmagic.server.ability.WizardAbilities.useTelekinesis(player);
 			case "wizard_meteor_shower" -> wildmagic.server.ability.WizardAbilities.useMeteorShower(player);
 			default -> usePlaceholderAbility(player, ability);
 		};
@@ -479,6 +480,7 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
     applyClassPassives(player);
     regenerateMana(player);
     wildmagic.server.ability.SorcererAbilities.tickPassives(player);
+			wildmagic.server.ability.WizardAbilities.tickCarefulMage(player);
 }
 
 	
@@ -494,6 +496,14 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 		sync(player);
 	}
 	
+
+
+	public static void consumeManaDirect(ServerPlayer player, int manaCost) {
+		PlayerClassData current = get(player);
+		if (!current.hasClass() || manaCost <= 0) return;
+		PLAYER_DATA.put(player.getUUID(), current.consumeMana(manaCost));
+		sync(player);
+	}
 
 	public static void fillMana(ServerPlayer player) {
 		PlayerClassData current = get(player);
