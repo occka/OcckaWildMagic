@@ -100,12 +100,16 @@ public final class SorcererAbilities {
     }
     public static boolean useShield(ServerPlayer player) { SHIELD_READY.put(player.getUUID(), true); return true; }
     public static boolean consumeShield(ServerPlayer player) { return SHIELD_READY.remove(player.getUUID()) != null; }
-    public static boolean useSunbeam(ServerPlayer player) { long now = player.level().getGameTime(); SUNBEAMS.add(new Sunbeam(player.getUUID(), now + 6*20L, now)); return true; }
+    public static boolean useSunbeam(ServerPlayer player) {
+        long now = player.level().getGameTime();
+        SUNBEAMS.add(new Sunbeam(player.getUUID(), now + 6 * 20L, now));
+        return true;
+    }
     public static boolean useDisintegrate(ServerPlayer player) {
         LivingEntity t = findRayTarget(player, 25.0D);
         if (t == null) { player.sendSystemMessage(Component.literal("Цель не найдена")); return false; }
-        float self = 5.0F + player.getRandom().nextFloat() * 7.0F;
-        player.hurtServer(player.level(), player.damageSources().playerAttack(player), self);
+        float targetDamage = 8.0F + player.getRandom().nextFloat() * 6.0F;
+        t.hurtServer(player.level(), player.damageSources().magic(), targetDamage);
         for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
             if (!slot.isArmor()) continue;
             var st = t.getItemBySlot(slot);
@@ -1014,17 +1018,22 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
                 continue;
             }
 
+            Vec3 from = owner.getEyePosition();
+            Vec3 to = from.add(owner.getLookAngle().normalize().scale(30.0D));
+            drawSunBeam(level, from, to);
+            level.playSound(null, owner.getX(), owner.getY(), owner.getZ(),
+                    net.minecraft.sounds.SoundEvents.BEACON_AMBIENT,
+                    net.minecraft.sounds.SoundSource.PLAYERS,
+                    0.18F, 1.85F);
+
             Sunbeam nextState = state;
             if (now >= state.nextTick()) {
-                Vec3 from = owner.getEyePosition();
-                Vec3 to = from.add(owner.getLookAngle().normalize().scale(30.0D));
-                AABB box = new AABB(from, to).inflate(0.8D);
+                AABB box = new AABB(from, to).inflate(2.6D);
                 for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, box, e -> e != owner && e.isAlive())) {
                     e.hurtServer(level, owner.damageSources().magic(), 2.0F);
                     e.igniteForSeconds(2);
                 }
-                drawSunBeam(level, from, to);
-                nextState = new Sunbeam(state.ownerId(), state.expireTick(), now + 20L);
+                nextState = new Sunbeam(state.ownerId(), state.expireTick(), now + 5L);
             }
             updated.add(nextState);
         }
@@ -1040,7 +1049,15 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
         }
         return best;
     }
-    private static void drawSunBeam(ServerLevel level, Vec3 from, Vec3 to) { Vec3 d = to.subtract(from); for(int i=0;i<=60;i++){ Vec3 p = from.add(d.scale(i/60.0D)); level.sendParticles(ParticleTypes.END_ROD,p.x,p.y,p.z,1,0.02,0.02,0.02,0); } }
+    private static void drawSunBeam(ServerLevel level, Vec3 from, Vec3 to) {
+        Vec3 d = to.subtract(from);
+        for (int i = 0; i <= 85; i++) {
+            Vec3 p = from.add(d.scale(i / 85.0D));
+            level.sendParticles(ParticleTypes.END_ROD, p.x, p.y, p.z, 5, 0.20, 0.20, 0.20, 0.0);
+            level.sendParticles(ParticleTypes.FLAME, p.x, p.y, p.z, 4, 0.16, 0.16, 0.16, 0.0);
+            level.sendParticles(ParticleTypes.GLOW, p.x, p.y, p.z, 3, 0.12, 0.12, 0.12, 0.0);
+        }
+    }
     private static void drawGreenBeam(ServerLevel level, Vec3 from, Vec3 to) { Vec3 d = to.subtract(from); for(int i=0;i<=50;i++){ Vec3 p=from.add(d.scale(i/50.0D)); level.sendParticles(ParticleTypes.HAPPY_VILLAGER,p.x,p.y,p.z,1,0.01,0.01,0.01,0); } }
 
     // -----------------------------------------------------------------------
