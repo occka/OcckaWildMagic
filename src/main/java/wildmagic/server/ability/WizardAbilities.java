@@ -12,7 +12,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.joml.Vector3f;
+import com.mojang.math.Transformation;
 
 public final class WizardAbilities {
 	private static final List<WizardProjectile> PROJECTILES = new CopyOnWriteArrayList<>();
@@ -53,7 +55,7 @@ public final class WizardAbilities {
 	}
 
 	public static boolean useMagicMissile(ServerPlayer player) {
-		List<LivingEntity> targets = findConeTargets(player, 25.0D, 0.82D);
+		List<LivingEntity> targets = findConeTargets(player, 25.0D, 0.72D);
 		if (targets.isEmpty()) {
 			player.sendSystemMessage(Component.literal("Цель не найдена"));
 			return false;
@@ -71,12 +73,13 @@ public final class WizardAbilities {
 
 		for (int i = 0; i < count; i++) {
 			LivingEntity target = targets.get(i % targets.size());
-			double offset = (i - ((count - 1) / 2.0D)) * 0.45D;
-			Vec3 start = player.getEyePosition().add(look.scale(0.8D)).add(right.scale(offset));
+			double offset = (i - ((count - 1) / 2.0D)) * 0.52D;
+			Vec3 start = player.getEyePosition().add(look.scale(0.9D)).add(right.scale(offset)).add(up.scale(0.12D * (i % 2)));
+			double arcHeight = 1.6D + (i % 3) * 0.5D;
 			Vec3 control = start
-					.add(look.scale(4.0D + (i % 3)))
-					.add(up.scale(1.4D + (i % 2) * 0.45D))
-					.add(right.scale(offset * 2.2D));
+					.add(look.scale(3.6D + (i % 3) * 0.7D))
+					.add(up.scale(arcHeight))
+					.add(right.scale(offset * 2.6D));
 			MAGIC_MISSILES.add(new MagicMissile(player.getUUID(), target.getUUID(), start, control, start, 0, 22 + (i % 3) * 2));
 		}
 
@@ -322,31 +325,31 @@ public final class WizardAbilities {
 			}
 
 			ServerLevel level = owner.level();
-			List<FallingBlockEntity> entities = findFallingBlocks(level, meteor.entityIds());
-			if (entities.isEmpty() || meteor.remainingTicks() <= 0) {
+			Display.BlockDisplay display = findMeteorDisplay(level, meteor.entityId());
+			if (display == null || meteor.remainingTicks() <= 0) {
 				explodeMeteor(level, owner, meteor.lastPosition());
+				if (display != null) display.discard();
 				METEORS.remove(meteor);
 				continue;
 			}
 
-			Vec3 pos = averagePosition(entities);
-			boolean hit = false;
-			for (FallingBlockEntity entity : entities) {
-				entity.setDeltaMovement(0.0D, -1.35D, 0.0D);
-				hit = hit || entity.onGround() || blockHitPosition(level, owner, entity.position(), entity.position().add(0.0D, -1.6D, 0.0D)) != null;
-			}
+			Vec3 pos = display.position().add(0.0D, -1.2D, 0.0D);
+			Vec3 next = pos.add(0.0D, -1.25D, 0.0D);
+			display.setPos(next.x, next.y, next.z);
+			BlockPos below = BlockPos.containing(next.x, next.y - 1.35D, next.z);
+			boolean hit = next.y <= level.getMinY() + 2
+					|| level.getBlockState(below).isSolid()
+					|| blockHitPosition(level, owner, next, next.add(0.0D, -1.8D, 0.0D)) != null;
 			spawnMeteorTrail(level, pos);
 			if (hit) {
-				for (FallingBlockEntity entity : entities) {
-					entity.discard();
-				}
+				display.discard();
 				explodeMeteor(level, owner, pos);
 				METEORS.remove(meteor);
 				continue;
 			}
 
 			METEORS.remove(meteor);
-			METEORS.add(new Meteor(meteor.ownerId(), meteor.entityIds(), pos, meteor.remainingTicks() - 1));
+			METEORS.add(new Meteor(meteor.ownerId(), meteor.entityId(), next, meteor.remainingTicks() - 1));
 		}
 	}
 
@@ -362,18 +365,16 @@ public final class WizardAbilities {
 		double x = center.x + Math.cos(angle) * distance;
 		double z = center.z + Math.sin(angle) * distance;
 		double y = Math.min(level.getMaxY() - 4.0D, Math.max(center.y + 28.0D, level.getMaxY() - 12.0D));
-		List<UUID> ids = new ArrayList<>();
-		for (int dx = 0; dx <= 1; dx++) {
-			for (int dz = 0; dz <= 1; dz++) {
-				BlockPos pos = BlockPos.containing(x + dx - 0.5D, y, z + dz - 0.5D);
-				FallingBlockEntity entity = FallingBlockEntity.fall(level, pos, Blocks.MAGMA_BLOCK.defaultBlockState());
-				entity.disableDrop();
-				entity.setHurtsEntities(0.0F, 0);
-				entity.setDeltaMovement(0.0D, -1.35D, 0.0D);
-				ids.add(entity.getUUID());
-			}
+		Display.BlockDisplay display = EntityType.BLOCK_DISPLAY.create(level, EntitySpawnReason.TRIGGERED);
+		if (display == null) {
+			return;
 		}
-		METEORS.add(new Meteor(owner.getUUID(), List.copyOf(ids), new Vec3(x, y, z), 80));
+		display.setBlockState(Blocks.MAGMA_BLOCK.defaultBlockState());
+		display.setTransformation(new Transformation(new Vector3f(-0.5F, -0.5F, -0.5F), new org.joml.Quaternionf(), new Vector3f(2.0F, 2.0F, 2.0F), new org.joml.Quaternionf()));
+		display.setViewRange(128.0F);
+		display.setPos(x, y, z);
+		level.addFreshEntity(display);
+		METEORS.add(new Meteor(owner.getUUID(), display.getUUID(), new Vec3(x, y, z), 220));
 		level.playSound(null, x, y, z,
 				net.minecraft.sounds.SoundEvents.FIRECHARGE_USE,
 				net.minecraft.sounds.SoundSource.PLAYERS,
@@ -448,14 +449,11 @@ public final class WizardAbilities {
 		return level.getEntityInAnyDimension(id) instanceof LivingEntity entity ? entity : null;
 	}
 
-	private static List<FallingBlockEntity> findFallingBlocks(ServerLevel level, List<UUID> ids) {
-		List<FallingBlockEntity> result = new ArrayList<>();
-		for (UUID id : ids) {
-			if (level.getEntityInAnyDimension(id) instanceof FallingBlockEntity entity && entity.isAlive()) {
-				result.add(entity);
-			}
+	private static Display.BlockDisplay findMeteorDisplay(ServerLevel level, UUID id) {
+		if (level.getEntityInAnyDimension(id) instanceof Display.BlockDisplay display && display.isAlive()) {
+			return display;
 		}
-		return result;
+		return null;
 	}
 
 	private static boolean hasLineOfSight(ServerLevel level, ServerPlayer owner, Vec3 start, Vec3 end) {
@@ -464,7 +462,7 @@ public final class WizardAbilities {
 	}
 
 	private static boolean isFriendly(ServerPlayer owner, LivingEntity entity) {
-		return entity == owner || owner.isAlliedTo(entity);
+		return entity == owner || WildMagicServerState.areTeammates(owner, entity);
 	}
 
 	private static Vec3 raycastBlock(ServerPlayer player, double range) {
@@ -536,14 +534,14 @@ public final class WizardAbilities {
 		AABB area = new AABB(center.x - 7.0D, center.y - 7.0D, center.z - 7.0D, center.x + 7.0D, center.y + 7.0D, center.z + 7.0D);
 		for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, area, e -> e != owner && e.isAlive() && !isFriendly(owner, e))) {
 			if (entity.position().distanceTo(center) <= 7.0D) {
-				float damage = 25.0F + owner.getRandom().nextFloat() * 15.0F;
+				float damage = 10.0F;
 				entity.hurtServer(level, owner.damageSources().onFire(), damage);
 				entity.igniteForSeconds(8);
 			}
 		}
 		level.explode(owner, center.x, center.y, center.z, 7.0F, true, Level.ExplosionInteraction.TNT);
 		igniteArea(level, center, 7);
-		level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, center.x, center.y, center.z, 2, 0.0D, 0.0D, 0.0D, 0.0D);
+		level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, center.x, center.y, center.z, 5, 1.2D, 0.8D, 1.2D, 0.0D);
 		level.sendParticles(ParticleTypes.FLAME, center.x, center.y + 1.0D, center.z, 160, 4.5D, 2.2D, 4.5D, 0.14D);
 		level.sendParticles(ParticleTypes.LAVA, center.x, center.y + 1.0D, center.z, 45, 3.2D, 1.7D, 3.2D, 0.0D);
 		level.playSound(null, center.x, center.y, center.z,
@@ -557,18 +555,11 @@ public final class WizardAbilities {
 		return start.scale(inv * inv).add(control.scale(2.0D * inv * t)).add(end.scale(t * t));
 	}
 
-	private static Vec3 averagePosition(List<FallingBlockEntity> entities) {
-		Vec3 sum = Vec3.ZERO;
-		for (FallingBlockEntity entity : entities) {
-			sum = sum.add(entity.position());
-		}
-		return sum.scale(1.0D / entities.size());
-	}
 
 	private static void spawnMeteorTrail(ServerLevel level, Vec3 pos) {
-		level.sendParticles(ParticleTypes.FLAME, pos.x, pos.y, pos.z, 60, 1.25D, 1.0D, 1.25D, 0.12D);
-		level.sendParticles(ParticleTypes.LAVA, pos.x, pos.y, pos.z, 10, 0.9D, 0.9D, 0.9D, 0.0D);
-		level.sendParticles(ParticleTypes.LARGE_SMOKE, pos.x, pos.y + 0.7D, pos.z, 24, 1.4D, 1.2D, 1.4D, 0.05D);
+		level.sendParticles(ParticleTypes.FLAME, pos.x, pos.y, pos.z, 90, 1.35D, 1.1D, 1.35D, 0.14D);
+		level.sendParticles(ParticleTypes.LAVA, pos.x, pos.y, pos.z, 22, 1.1D, 1.0D, 1.1D, 0.0D);
+		level.sendParticles(ParticleTypes.LARGE_SMOKE, pos.x, pos.y + 0.7D, pos.z, 36, 1.6D, 1.3D, 1.6D, 0.06D);
 		level.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, pos.x, pos.y + 1.0D, pos.z, 8, 1.5D, 1.0D, 1.5D, 0.02D);
 	}
 
@@ -670,6 +661,6 @@ public final class WizardAbilities {
 	private record MeteorShower(UUID ownerId, Vec3 center, long expireTick, int remainingMeteors, long nextMeteorTick) {
 	}
 
-	private record Meteor(UUID ownerId, List<UUID> entityIds, Vec3 lastPosition, int remainingTicks) {
+	private record Meteor(UUID ownerId, UUID entityId, Vec3 lastPosition, int remainingTicks) {
 	}
 }
