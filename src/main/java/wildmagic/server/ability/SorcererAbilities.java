@@ -1002,12 +1002,19 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
         });
     }
     private static void tickSunbeams(MinecraftServer server) {
-        SUNBEAMS.removeIf(state -> {
+        List<Sunbeam> updated = new ArrayList<>();
+        for (Sunbeam state : SUNBEAMS) {
             ServerPlayer owner = server.getPlayerList().getPlayer(state.ownerId());
-            if (owner == null || !owner.isAlive()) return true;
+            if (owner == null || !owner.isAlive()) {
+                continue;
+            }
             ServerLevel level = owner.level();
             long now = level.getGameTime();
-            if (now > state.expireTick()) return true;
+            if (now > state.expireTick()) {
+                continue;
+            }
+
+            Sunbeam nextState = state;
             if (now >= state.nextTick()) {
                 Vec3 from = owner.getEyePosition();
                 Vec3 to = from.add(owner.getLookAngle().normalize().scale(30.0D));
@@ -1017,11 +1024,12 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
                     e.igniteForSeconds(2);
                 }
                 drawSunBeam(level, from, to);
-                SUNBEAMS.remove(state);
-                SUNBEAMS.add(new Sunbeam(state.ownerId(), state.expireTick(), now + 20L));
+                nextState = new Sunbeam(state.ownerId(), state.expireTick(), now + 20L);
             }
-            return false;
-        });
+            updated.add(nextState);
+        }
+        SUNBEAMS.clear();
+        SUNBEAMS.addAll(updated);
     }
     private static LivingEntity findRayTarget(ServerPlayer player, double range) {
         Vec3 start = player.getEyePosition(); Vec3 end = start.add(player.getLookAngle().normalize().scale(range));

@@ -164,7 +164,7 @@ public final class WizardAbilities {
 		int added = 0;
 		for (LivingEntity target : targets) {
 			if (added >= maxTargets) break;
-			target.setDeltaMovement(target.getDeltaMovement().add(0.0D, 2.0D, 0.0D));
+			target.setDeltaMovement(target.getDeltaMovement().add(0.0D, 0.35D, 0.0D));
 			target.hurtMarked = true;
 			TELEKINESIS.add(new TelekinesisState(player.getUUID(), target.getUUID(), level.getGameTime() + 6 * 20L));
 			added++;
@@ -390,7 +390,7 @@ public final class WizardAbilities {
 			Vec3 desired = owner.getEyePosition().add(look.scale(6.0D));
 			Vec3 diff = desired.subtract(target.position());
 			Vec3 push = new Vec3(diff.x, 0.0D, diff.z).scale(0.18D);
-			target.setDeltaMovement(push.x, Math.max(0.01D, target.getDeltaMovement().y * 0.7D), push.z);
+			target.setDeltaMovement(push.x, Math.max(0.08D, target.getDeltaMovement().y * 0.7D), push.z);
 			target.hurtMarked = true;
 			level.sendParticles(ParticleTypes.WITCH, target.getX(), target.getY() + target.getBbHeight() * 0.6D, target.getZ(), 8, 0.2D, 0.2D, 0.2D, 0.02D);
 			drawTelekinesisBeam(level, owner.getEyePosition(), target.getEyePosition());
