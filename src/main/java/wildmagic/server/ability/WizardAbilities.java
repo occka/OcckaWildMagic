@@ -467,7 +467,7 @@ public final class WizardAbilities {
 	}
 
 	private static boolean isFriendly(ServerPlayer owner, LivingEntity entity) {
-		return entity == owner || owner.isAlliedTo(entity);
+		return entity == owner || WildMagicServerState.areTeammates(owner, entity);
 	}
 
 	private static Vec3 raycastBlock(ServerPlayer player, double range) {
