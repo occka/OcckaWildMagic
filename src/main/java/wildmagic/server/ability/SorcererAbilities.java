@@ -68,6 +68,53 @@ public final class SorcererAbilities {
     private static final List<PoisonCloud> POISON_CLOUDS = new java.util.concurrent.CopyOnWriteArrayList<>();
     private static final Map<UUID, Boolean> METAMAGIC_ACTIVE = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> TWINNED_ACTIVE = new ConcurrentHashMap<>();
+    private record WebZone(UUID ownerId, BlockPos center, long expireTick) {}
+    private record Sunbeam(UUID ownerId, long expireTick, long nextTick) {}
+    private static final Map<UUID, Long> FIRE_PALMS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Boolean> SHIELD_READY = new ConcurrentHashMap<>();
+    private static final List<WebZone> WEB_ZONES = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final List<Sunbeam> SUNBEAMS = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public static boolean useGust(ServerPlayer player) {
+        ServerLevel level = player.level();
+        Vec3 dir = player.getLookAngle().normalize();
+        Vec3 p = player.getEyePosition().add(dir.scale(1.2D));
+        level.sendParticles(ParticleTypes.CLOUD, p.x, p.y, p.z, 30, 0.8D, 0.6D, 0.8D, 0.03D);
+        AABB area = new AABB(p.x-2.5D,p.y-2.0D,p.z-2.5D,p.x+2.5D,p.y+2.0D,p.z+2.5D);
+        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, area, e -> e != player && e.isAlive())) {
+            e.push(dir.x * 1.1D, 0.2D, dir.z * 1.1D);
+            e.hurtMarked = true;
+        }
+        return true;
+    }
+    public static boolean useFirePalms(ServerPlayer player) { FIRE_PALMS.put(player.getUUID(), player.level().getGameTime() + 30*20L); return true; }
+    public static boolean useWeb(ServerPlayer player) {
+        ServerLevel level = player.level();
+        BlockPos c = BlockPos.containing(player.position().add(player.getLookAngle().normalize().scale(6.0D)));
+        for(int dx=-2;dx<=2;dx++) for(int dy=-2;dy<=2;dy++) for(int dz=-2;dz<=2;dz++) {
+            BlockPos pos = c.offset(dx,dy,dz);
+            if (level.getBlockState(pos).isAir()) level.setBlock(pos, Blocks.COBWEB.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_ALL);
+        }
+        WEB_ZONES.add(new WebZone(player.getUUID(), c, level.getGameTime() + 20*20L));
+        return true;
+    }
+    public static boolean useShield(ServerPlayer player) { SHIELD_READY.put(player.getUUID(), true); return true; }
+    public static boolean consumeShield(ServerPlayer player) { return SHIELD_READY.remove(player.getUUID()) != null; }
+    public static boolean useSunbeam(ServerPlayer player) { long now = player.level().getGameTime(); SUNBEAMS.add(new Sunbeam(player.getUUID(), now + 6*20L, now)); return true; }
+    public static boolean useDisintegrate(ServerPlayer player) {
+        LivingEntity t = findRayTarget(player, 25.0D);
+        if (t == null) { player.sendSystemMessage(Component.literal("Цель не найдена")); return false; }
+        float self = 5.0F + player.getRandom().nextFloat() * 7.0F;
+        player.hurtServer(player.level(), player.damageSources().playerAttack(player), self);
+        for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
+            if (!slot.isArmor()) continue;
+            var st = t.getItemBySlot(slot);
+            if (st.isDamageableItem()) st.setDamageValue(Math.min(st.getMaxDamage()-1, st.getDamageValue() + (int)(st.getMaxDamage()*0.4D)));
+        }
+        drawGreenBeam(player.level(), player.getEyePosition(), t.getEyePosition());
+        return true;
+    }
+
 
     /** Mage Armor expire game-time per player */
     private static final Map<UUID, Long> MAGE_ARMOR_EXPIRE = new ConcurrentHashMap<>();
@@ -176,6 +223,8 @@ public final class SorcererAbilities {
         });
 
         tickPoisonClouds(server);
+        tickWebZones(server);
+        tickSunbeams(server);
     }
 
     // -----------------------------------------------------------------------
@@ -207,10 +256,16 @@ public final class SorcererAbilities {
             }
         }
 
+        FIRE_PALMS.entrySet().removeIf(e -> player.level().getGameTime() > e.getValue());
+
         // Mage Armor expire check
         Long mageExpire = MAGE_ARMOR_EXPIRE.get(player.getUUID());
         if (mageExpire != null && player.level().getGameTime() > mageExpire) {
             MAGE_ARMOR_EXPIRE.remove(player.getUUID());
+        FIRE_PALMS.remove(player.getUUID());
+        SHIELD_READY.remove(player.getUUID());
+        WEB_ZONES.removeIf(z -> z.ownerId().equals(player.getUUID()));
+        SUNBEAMS.removeIf(z -> z.ownerId().equals(player.getUUID()));
             removeMageArmor(player);
         }
     }
@@ -328,7 +383,10 @@ public static void onSorcererAttack(ServerPlayer attacker, LivingEntity victim) 
 
         default -> {}
     }
+    Long fire = FIRE_PALMS.get(attacker.getUUID());
+    if (fire != null && attacker.level().getGameTime() <= fire) victim.igniteForSeconds(2);
 }
+
 
 
 private static final java.util.Set<UUID> SILENT_SPELL_ACTIVE = ConcurrentHashMap.newKeySet();
@@ -929,6 +987,54 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
         }
     }
 
+
+    private static void tickWebZones(MinecraftServer server) {
+        WEB_ZONES.removeIf(zone -> {
+            ServerPlayer owner = server.getPlayerList().getPlayer(zone.ownerId());
+            if (owner == null) return true;
+            if (owner.level().getGameTime() <= zone.expireTick()) return false;
+            ServerLevel level = owner.level();
+            for(int dx=-2;dx<=2;dx++) for(int dy=-2;dy<=2;dy++) for(int dz=-2;dz<=2;dz++) {
+                BlockPos pos = zone.center().offset(dx,dy,dz);
+                if (level.getBlockState(pos).is(Blocks.COBWEB)) level.setBlock(pos, Blocks.AIR.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_ALL);
+            }
+            return true;
+        });
+    }
+    private static void tickSunbeams(MinecraftServer server) {
+        SUNBEAMS.removeIf(state -> {
+            ServerPlayer owner = server.getPlayerList().getPlayer(state.ownerId());
+            if (owner == null || !owner.isAlive()) return true;
+            ServerLevel level = owner.level();
+            long now = level.getGameTime();
+            if (now > state.expireTick()) return true;
+            if (now >= state.nextTick()) {
+                Vec3 from = owner.getEyePosition();
+                Vec3 to = from.add(owner.getLookAngle().normalize().scale(30.0D));
+                AABB box = new AABB(from, to).inflate(0.8D);
+                for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, box, e -> e != owner && e.isAlive())) {
+                    e.hurtServer(level, owner.damageSources().magic(), 2.0F);
+                    e.igniteForSeconds(2);
+                }
+                drawSunBeam(level, from, to);
+                SUNBEAMS.remove(state);
+                SUNBEAMS.add(new Sunbeam(state.ownerId(), state.expireTick(), now + 20L));
+            }
+            return false;
+        });
+    }
+    private static LivingEntity findRayTarget(ServerPlayer player, double range) {
+        Vec3 start = player.getEyePosition(); Vec3 end = start.add(player.getLookAngle().normalize().scale(range));
+        AABB path = new AABB(start, end).inflate(0.4D); LivingEntity best = null; double bestDist = Double.MAX_VALUE;
+        for (LivingEntity entity : player.level().getEntitiesOfClass(LivingEntity.class, path, e -> e != player && e.isAlive())) {
+            var hit = entity.getBoundingBox().inflate(0.4D).clip(start, end);
+            if (hit.isPresent()) { double d = start.distanceTo(hit.get()); if (d < bestDist) { bestDist = d; best = entity; } }
+        }
+        return best;
+    }
+    private static void drawSunBeam(ServerLevel level, Vec3 from, Vec3 to) { Vec3 d = to.subtract(from); for(int i=0;i<=60;i++){ Vec3 p = from.add(d.scale(i/60.0D)); level.sendParticles(ParticleTypes.END_ROD,p.x,p.y,p.z,1,0.02,0.02,0.02,0); } }
+    private static void drawGreenBeam(ServerLevel level, Vec3 from, Vec3 to) { Vec3 d = to.subtract(from); for(int i=0;i<=50;i++){ Vec3 p=from.add(d.scale(i/50.0D)); level.sendParticles(ParticleTypes.HAPPY_VILLAGER,p.x,p.y,p.z,1,0.01,0.01,0.01,0); } }
+
     // -----------------------------------------------------------------------
     // Cleanup
     // -----------------------------------------------------------------------
@@ -941,6 +1047,10 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
         SILENT_SPELL_ACTIVE.remove(player.getUUID());
         TWINNED_ACTIVE.remove(player.getUUID());
         MAGE_ARMOR_EXPIRE.remove(player.getUUID());
+        FIRE_PALMS.remove(player.getUUID());
+        SHIELD_READY.remove(player.getUUID());
+        WEB_ZONES.removeIf(z -> z.ownerId().equals(player.getUUID()));
+        SUNBEAMS.removeIf(z -> z.ownerId().equals(player.getUUID()));
         removeDragonHide(player);
         removeMageArmor(player);
     }

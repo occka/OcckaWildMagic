@@ -164,7 +164,7 @@ public final class WizardAbilities {
 		int added = 0;
 		for (LivingEntity target : targets) {
 			if (added >= maxTargets) break;
-			target.setDeltaMovement(target.getDeltaMovement().add(0.0D, 0.0D, 0.0D));
+			target.setDeltaMovement(target.getDeltaMovement().add(0.0D, 0.35D, 0.0D));
 			target.hurtMarked = true;
 			TELEKINESIS.add(new TelekinesisState(player.getUUID(), target.getUUID(), level.getGameTime() + 6 * 20L));
 			added++;
@@ -419,7 +419,7 @@ public final class WizardAbilities {
 		if (cd != null && now < cd.nextAllowedTick()) return;
 		int manaCost = 50;
 		var data = WildMagicServerState.get(player);
-		if (player.fallDistance > 12.0F && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 15*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
+		if (player.fallDistance > 6.0F && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 15*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
 		if (player.isOnFire() && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 15*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
 		if (player.isInWater() && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.WATER_BREATHING, 30*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }
 		if (player.level().getSkyDarken() >= 8 && player.level().canSeeSky(BlockPos.containing(player.position())) && data.mana() >= manaCost) { player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 60*20, 0, false, false), player); WildMagicServerState.consumeManaDirect(player, manaCost); setPassiveCd(player, now); return; }

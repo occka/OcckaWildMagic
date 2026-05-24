@@ -197,10 +197,14 @@ public final class WildMagicServerState {
 			case "sorcerer_dragon_breath" -> wildmagic.server.ability.SorcererAbilities.useDragonBreath(player);
 case "sorcerer_elemental_dash" -> wildmagic.server.ability.SorcererAbilities.useElementalDash(player);
 case "sorcerer_storm_jump" -> wildmagic.server.ability.SorcererAbilities.useStormJump(player);
+case "sorcerer_shield"      -> wildmagic.server.ability.SorcererAbilities.useShield(player);
 case "sorcerer_elemental_burst" -> wildmagic.server.ability.SorcererAbilities.useElementalBurst(player);
 case "sorcerer_draconic_wings" -> wildmagic.server.ability.SorcererAbilities.useDraconicWings(player);
 case "sorcerer_metamagic" -> wildmagic.server.ability.SorcererAbilities.useMetamagic(player);
+case "sorcerer_web"         -> wildmagic.server.ability.SorcererAbilities.useWeb(player);
 case "sorcerer_silent_spell" -> wildmagic.server.ability.SorcererAbilities.useSilentSpell(player);
+case "sorcerer_sunbeam"     -> wildmagic.server.ability.SorcererAbilities.useSunbeam(player);
+case "sorcerer_disintegrate" -> wildmagic.server.ability.SorcererAbilities.useDisintegrate(player);
 case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWildSurge(player);
 			case "bard_dispel" -> BardAbilities.useBardDispel(player);
 			case "bard_slow_zone" -> BardAbilities.useBardSlowZone(player);
@@ -214,8 +218,10 @@ case "sorcerer_wild_surge" -> wildmagic.server.ability.SorcererAbilities.useWild
 			case "bard_hypnotic_pattern" -> BardAbilities.useBardHypnoticPattern(player);
 			case "sorcerer_leap"        -> wildmagic.server.ability.SorcererAbilities.useLeap(player);
     case "sorcerer_ice_dagger"  -> wildmagic.server.ability.SorcererAbilities.useIceDagger(player);
+    case "sorcerer_gust"        -> wildmagic.server.ability.SorcererAbilities.useGust(player);
     case "sorcerer_pseudo_life" -> wildmagic.server.ability.SorcererAbilities.usePseudoLife(player);
     case "sorcerer_repair"      -> wildmagic.server.ability.SorcererAbilities.useRepair(player);
+    case "sorcerer_fire_palms"  -> wildmagic.server.ability.SorcererAbilities.useFirePalms(player);
     case "sorcerer_mage_armor"  -> wildmagic.server.ability.SorcererAbilities.useMageArmor(player);
 			case "bard_word_of_power" -> BardAbilities.useBardWordOfPower(player);
 			case "bard_dominate" -> BardAbilities.useBardDominate(player);
