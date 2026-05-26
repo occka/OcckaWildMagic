@@ -20,7 +20,6 @@ import wildmagic.client.gui.ClassMenuScreen;
 import wildmagic.client.state.ClientClassState;
 import wildmagic.network.WildMagicNetworking;
 import wildmagic.client.state.ClientClimbState;
-import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 
 public class OcckaWildMagicClient implements ClientModInitializer {
 	private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
@@ -34,7 +33,6 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		registerNetworking();
-		registerItemColors();
 		registerKeybind();
 		HudElementRegistry.attachElementBefore(
 				VanillaHudElements.CHAT,
@@ -42,17 +40,6 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 				(graphics, tickCounter) -> renderClassExpHud(graphics)
 		);
 	}
-
-	private static void registerItemColors() {
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x5B2FCC : -1, WildMagicItems.MANA_POTION);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x2A5FFF : -1, WildMagicItems.MANA_POTION_2);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xFF4500 : -1, WildMagicItems.DRAGON_POTION_FIRE);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xAAEEFF : -1, WildMagicItems.DRAGON_POTION_ICE);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x4444FF : -1, WildMagicItems.DRAGON_POTION_LIGHTNING);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x1A7A1A : -1, WildMagicItems.DRAGON_POTION_POISON);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xCCCCCC : -1, WildMagicItems.DRAGON_POTION_THUNDER);
-	}
-
 
 	private static void registerNetworking() {
 		ClientPlayNetworking.registerGlobalReceiver(WildMagicNetworking.SyncClassDataS2CPayload.TYPE, (payload, context) -> context.client().execute(() -> ClientClassState.update(payload.serializedData())));
