@@ -78,13 +78,14 @@ public final class SorcererAbilities {
     public static boolean useGust(ServerPlayer player) {
         ServerLevel level = player.level();
         Vec3 dir = player.getLookAngle().normalize();
-        Vec3 p = player.getEyePosition().add(dir.scale(1.2D));
-        level.sendParticles(ParticleTypes.CLOUD, p.x, p.y, p.z, 30, 0.8D, 0.6D, 0.8D, 0.03D);
-        AABB area = new AABB(p.x-2.5D,p.y-2.0D,p.z-2.5D,p.x+2.5D,p.y+2.0D,p.z+2.5D);
-        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, area, e -> e != player && e.isAlive())) {
-            e.push(dir.x * 1.1D, 0.2D, dir.z * 1.1D);
-            e.hurtMarked = true;
+        var windCharge = EntityType.WIND_CHARGE.create(level, net.minecraft.world.entity.EntitySpawnReason.TRIGGERED);
+        if (windCharge == null) {
+            return false;
         }
+        Vec3 start = player.getEyePosition().add(dir.scale(1.0D));
+        windCharge.setPos(start.x, start.y, start.z);
+        windCharge.setDeltaMovement(dir.scale(1.6D));
+        level.addFreshEntity(windCharge);
         return true;
     }
     public static boolean useFirePalms(ServerPlayer player) { FIRE_PALMS.put(player.getUUID(), player.level().getGameTime() + 30*20L); return true; }
@@ -897,8 +898,70 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
             applyElementImpact(player, target, element, true);
         }
 
-        applyDashTrail(player, level, element, center, true);
-        level.sendParticles(ParticleTypes.EXPLOSION, center.x, center.y + 0.2D, center.z, 4, 0.8D, 0.2D, 0.8D, 0.0D);
+        level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, center.x, center.y + 0.2D, center.z, 8, 1.6D, 0.6D, 1.6D, 0.0D);
+        level.sendParticles(ParticleTypes.CLOUD, center.x, center.y + 0.3D, center.z, 120, 2.8D, 0.4D, 2.8D, 0.03D);
+        switch (element) {
+            case FIRE -> {
+                BlockPos origin = BlockPos.containing(center);
+                for (int dx = -5; dx <= 5; dx++) for (int dz = -5; dz <= 5; dz++) {
+                    if (dx * dx + dz * dz > 25) continue;
+                    BlockPos ground = level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, origin.offset(dx, 0, dz)).below();
+                    BlockPos firePos = ground.above();
+                    if (level.getBlockState(firePos).isAir() && level.getBlockState(ground).isSolid()) {
+                        level.setBlock(firePos, Blocks.FIRE.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_ALL);
+                    }
+                }
+                level.sendParticles(ParticleTypes.FLAME, center.x, center.y + 0.5D, center.z, 140, 3.2D, 1.0D, 3.2D, 0.08D);
+                level.sendParticles(ParticleTypes.LAVA, center.x, center.y + 0.5D, center.z, 36, 2.4D, 0.6D, 2.4D, 0.0D);
+            }
+            case LIGHTNING -> {
+                var bolt = EntityType.LIGHTNING_BOLT.create(level, net.minecraft.world.entity.EntitySpawnReason.TRIGGERED);
+                if (bolt != null) {
+                    bolt.snapTo(center.x, center.y, center.z);
+                    bolt.setVisualOnly(true);
+                    level.addFreshEntity(bolt);
+                }
+                for (int ring = 1; ring <= 3; ring++) {
+                    double radius = ring * 2.2D;
+                    for (int i = 0; i < 28; i++) {
+                        double angle = (Math.PI * 2.0D * i) / 28.0D;
+                        level.sendParticles(ParticleTypes.ELECTRIC_SPARK, center.x + Math.cos(angle) * radius, center.y + 0.25D, center.z + Math.sin(angle) * radius, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+                    }
+                }
+            }
+            case THUNDER -> {
+                AABB shock = new AABB(center.x - 6.0D, center.y - 2.0D, center.z - 6.0D, center.x + 6.0D, center.y + 3.0D, center.z + 6.0D);
+                for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, shock, e -> e != player && e.isAlive() && e.position().distanceTo(center) <= 6.0D)) {
+                    Vec3 kb = target.position().subtract(center).normalize().scale(0.85D);
+                    target.push(kb.x, 0.3D, kb.z);
+                    target.hurtMarked = true;
+                }
+                for (int dx = -6; dx <= 6; dx++) for (int dz = -6; dz <= 6; dz++) {
+                    if (dx * dx + dz * dz > 36) continue;
+                    BlockPos top = level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, BlockPos.containing(center.x + dx, center.y, center.z + dz));
+                    BlockPos blockPos = top.below();
+                    if (level.getBlockState(blockPos).is(Blocks.SHORT_GRASS) || level.getBlockState(blockPos).is(Blocks.TALL_GRASS) || level.getBlockState(blockPos).is(Blocks.FERN) || level.getBlockState(blockPos).is(Blocks.LARGE_FERN) || level.getBlockState(blockPos).is(Blocks.OAK_LEAVES) || level.getBlockState(blockPos).is(Blocks.BIRCH_LEAVES) || level.getBlockState(blockPos).is(Blocks.JUNGLE_LEAVES) || level.getBlockState(blockPos).is(Blocks.ACACIA_LEAVES) || level.getBlockState(blockPos).is(Blocks.DARK_OAK_LEAVES) || level.getBlockState(blockPos).is(Blocks.MANGROVE_LEAVES) || level.getBlockState(blockPos).is(Blocks.CHERRY_LEAVES)) {
+                        level.destroyBlock(blockPos, false);
+                    }
+                }
+                level.sendParticles(ParticleTypes.SONIC_BOOM, center.x, center.y + 0.4D, center.z, 1, 0, 0, 0, 0);
+            }
+            case ICE -> {
+                AABB freeze = new AABB(center.x - 5.0D, center.y - 2.0D, center.z - 5.0D, center.x + 5.0D, center.y + 3.0D, center.z + 5.0D);
+                for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, freeze, e -> e != player && e.isAlive() && e.position().distanceTo(center) <= 5.0D)) {
+                    target.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 8 * 20, 2, false, false), player);
+                }
+                for (int dx = -5; dx <= 5; dx++) for (int dz = -5; dz <= 5; dz++) {
+                    if (dx * dx + dz * dz > 25) continue;
+                    BlockPos top = level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, BlockPos.containing(center.x + dx, center.y, center.z + dz));
+                    if (level.getBlockState(top).isAir() && level.getBlockState(top.below()).isSolid()) {
+                        level.setBlock(top, Blocks.SNOW.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_ALL);
+                    }
+                }
+                level.sendParticles(ParticleTypes.SNOWFLAKE, center.x, center.y + 0.8D, center.z, 150, 3.5D, 1.0D, 3.5D, 0.02D);
+            }
+            case POISON -> POISON_CLOUDS.add(new PoisonCloud(player.getUUID(), center.add(0.0D, 0.5D, 0.0D), level.getGameTime() + 6 * 20L, level.getGameTime()));
+        }
         playElementSound(level, center.x, center.y, center.z, element);
     }
 
@@ -930,18 +993,18 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
             }
             case THUNDER -> {
                 double radius = endpoint ? 4.0D : 1.5D;
-                double strength = endpoint ? 2.4D : 1.2D;
+                double strength = endpoint ? 1.2D : 0.6D;
                 AABB area = new AABB(point.x - radius, point.y - radius, point.z - radius, point.x + radius, point.y + radius, point.z + radius);
                 for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area,
                         e -> e != player && e.isAlive() && e.position().distanceTo(point) <= radius)) {
                     Vec3 kb = target.position().subtract(point).normalize().scale(strength);
-                    target.push(kb.x, endpoint ? 1.0D : 0.35D, kb.z);
+                    target.push(kb.x, endpoint ? 0.4D : 0.2D, kb.z);
                     target.hurtMarked = true;
                 }
                 level.sendParticles(ParticleTypes.POOF, point.x, point.y + 0.5D, point.z, endpoint ? 36 : 6, 0.45D, 0.25D, 0.45D, 0.08D);
             }
             case POISON -> {
-                POISON_CLOUDS.add(new PoisonCloud(player.getUUID(), point.add(0.0D, 0.5D, 0.0D), level.getGameTime() + 5 * 20L, level.getGameTime()));
+                POISON_CLOUDS.add(new PoisonCloud(player.getUUID(), point.add(0.0D, 0.5D, 0.0D), level.getGameTime() + 6 * 20L, level.getGameTime()));
                 level.sendParticles(ParticleTypes.HAPPY_VILLAGER, point.x, point.y + 0.5D, point.z, endpoint ? 28 : 5, 0.45D, 0.2D, 0.45D, 0.03D);
             }
         }
@@ -984,8 +1047,8 @@ bolt.snapTo(target.getX(), target.getY(), target.getZ());
             case LIGHTNING -> target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 5 * 20, 0, false, false), caster);
             case POISON -> target.addEffect(new MobEffectInstance(MobEffects.POISON, 6 * 20, 0, false, false), caster);
             case THUNDER -> {
-                Vec3 kb = target.position().subtract(caster.position()).normalize().scale(strongThunder ? 2.2D : 1.2D);
-                target.push(kb.x, strongThunder ? 1.0D : 0.5D, kb.z);
+                Vec3 kb = target.position().subtract(caster.position()).normalize().scale(strongThunder ? 1.1D : 0.65D);
+                target.push(kb.x, strongThunder ? 0.45D : 0.25D, kb.z);
                 target.hurtMarked = true;
             }
         }

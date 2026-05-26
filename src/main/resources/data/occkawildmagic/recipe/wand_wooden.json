@@ -1,0 +1,11 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:stick",
+        "minecraft:gunpowder"
+    ],
+    "result": {
+        "id": "occkawildmagic:wand_wooden",
+        "count": 1
+    }
+}

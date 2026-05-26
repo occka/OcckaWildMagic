@@ -156,14 +156,31 @@ private void initClassDetails(PlayerClassData data) {
         graphics.text(font, Component.literal("Ресурс: КД способностей").withStyle(ChatFormatting.AQUA), width / 2 + 108, barY, 0xFFFFFFFF, true);
     }
 
-    // описание выбранной способности
-String selectedId = data.activeAbility(selectedAbilitySlot);
-if (!selectedId.isBlank()) {
-    ClassProgression.abilityFor(data.selectedClass(), selectedId).ifPresent(ability -> {
-        drawCentered(graphics, Component.literal(ability.description()).withStyle(ChatFormatting.GRAY), width / 2, height - 24, 0xFFCCCCCC);
-    });
-}
-drawCentered(graphics, Component.literal("[П] — пассивка, работает всегда. Выбери слот сверху, затем нажми способность."), width / 2, height - 14, 0xFF888888);
+    String selectedId = data.activeAbility(selectedAbilitySlot);
+    if (!selectedId.isBlank()) {
+        ClassProgression.abilityFor(data.selectedClass(), selectedId).ifPresent(ability -> {
+            drawCentered(graphics, Component.literal(ability.description()).withStyle(ChatFormatting.GRAY), width / 2, height - 44, 0xFFCCCCCC);
+        });
+    }
+
+    List<AbilityDefinition> unlockedPassives = ClassProgression.abilitiesFor(data.selectedClass()).stream()
+            .filter(AbilityDefinition::passive)
+            .filter(ability -> ability.isUnlocked(data))
+            .sorted(Comparator.comparingInt(AbilityDefinition::unlockLevel))
+            .toList();
+
+    if (!unlockedPassives.isEmpty()) {
+        drawCentered(graphics, Component.literal("Пассивки класса:").withStyle(ChatFormatting.YELLOW), width / 2, height - 30, 0xFFFFFFFF);
+        int y = height - 20;
+        for (AbilityDefinition passive : unlockedPassives) {
+            String text = passive.title() + " — " + passive.description();
+            graphics.text(font, Component.literal("• " + text).withStyle(ChatFormatting.DARK_GRAY), 10, y, 0xFFB8B8B8, false);
+            y += 10;
+            if (y > height - 2) break;
+        }
+    } else {
+        drawCentered(graphics, Component.literal("Пассивки ещё не открыты на этом уровне.").withStyle(ChatFormatting.DARK_GRAY), width / 2, height - 18, 0xFF888888);
+    }
 }
 
 	private String abilityResourceText(PlayerClassData data, AbilityDefinition ability) {

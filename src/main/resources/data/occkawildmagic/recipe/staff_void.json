@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:end_rod",
+        "minecraft:end_rod",
+        "minecraft:obsidian"
+    ],
+    "result": {
+        "id": "occkawildmagic:staff_void",
+        "count": 1
+    }
+}
