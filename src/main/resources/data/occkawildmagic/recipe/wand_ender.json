@@ -1,0 +1,11 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:end_rod",
+        "minecraft:chorus_fruit"
+    ],
+    "result": {
+        "id": "occkawildmagic:wand_ender",
+        "count": 1
+    }
+}
