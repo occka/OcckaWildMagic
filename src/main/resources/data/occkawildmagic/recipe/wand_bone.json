@@ -1,0 +1,11 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:bone",
+        "minecraft:chain"
+    ],
+    "result": {
+        "id": "occkawildmagic:wand_bone",
+        "count": 1
+    }
+}

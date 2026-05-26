@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:stick",
+        "minecraft:stick",
+        "minecraft:lightning_rod"
+    ],
+    "result": {
+        "id": "occkawildmagic:staff_copper",
+        "count": 1
+    }
+}
