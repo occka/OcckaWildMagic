@@ -5,7 +5,6 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
@@ -21,6 +20,7 @@ import wildmagic.client.gui.ClassMenuScreen;
 import wildmagic.client.state.ClientClassState;
 import wildmagic.network.WildMagicNetworking;
 import wildmagic.client.state.ClientClimbState;
+import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 
 public class OcckaWildMagicClient implements ClientModInitializer {
 	private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
@@ -44,14 +44,16 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 	}
 
 	private static void registerItemColors() {
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x5B2FCC : -1, WildMagicItems.MANA_POTION);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x2A5FFF : -1, WildMagicItems.MANA_POTION_2);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xFF4500 : -1, WildMagicItems.DRAGON_POTION_FIRE);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xAAEEFF : -1, WildMagicItems.DRAGON_POTION_ICE);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x4444FF : -1, WildMagicItems.DRAGON_POTION_LIGHTNING);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x1A7A1A : -1, WildMagicItems.DRAGON_POTION_POISON);
-		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xCCCCCC : -1, WildMagicItems.DRAGON_POTION_THUNDER);
-	}
+    var colors = Minecraft.getInstance().getItemColors();
+    colors.register((stack, tintIndex) -> tintIndex == 0 ? 0x5B2FCC : -1, WildMagicItems.MANA_POTION);
+    colors.register((stack, tintIndex) -> tintIndex == 0 ? 0x2A5FFF : -1, WildMagicItems.MANA_POTION_2);
+    colors.register((stack, tintIndex) -> tintIndex == 0 ? 0xFF4500 : -1, WildMagicItems.DRAGON_POTION_FIRE);
+    colors.register((stack, tintIndex) -> tintIndex == 0 ? 0xAAEEFF : -1, WildMagicItems.DRAGON_POTION_ICE);
+    colors.register((stack, tintIndex) -> tintIndex == 0 ? 0x4444FF : -1, WildMagicItems.DRAGON_POTION_LIGHTNING);
+    colors.register((stack, tintIndex) -> tintIndex == 0 ? 0x1A7A1A : -1, WildMagicItems.DRAGON_POTION_POISON);
+    colors.register((stack, tintIndex) -> tintIndex == 0 ? 0xCCCCCC : -1, WildMagicItems.DRAGON_POTION_THUNDER);
+}
+
 
 	private static void registerNetworking() {
 		ClientPlayNetworking.registerGlobalReceiver(WildMagicNetworking.SyncClassDataS2CPayload.TYPE, (payload, context) -> context.client().execute(() -> ClientClassState.update(payload.serializedData())));
