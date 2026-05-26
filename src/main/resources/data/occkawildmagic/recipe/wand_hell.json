@@ -1,0 +1,11 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:blaze_rod",
+        "minecraft:nether_star"
+    ],
+    "result": {
+        "id": "occkawildmagic:wand_hell",
+        "count": 1
+    }
+}

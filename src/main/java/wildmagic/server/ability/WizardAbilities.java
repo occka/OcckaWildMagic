@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.joml.Vector3f;
+import org.joml.Quaternionf;
 import com.mojang.math.Transformation;
 
 public final class WizardAbilities {
@@ -176,8 +177,8 @@ public final class WizardAbilities {
 		ServerLevel level = player.level();
 		Vec3 center = raycastBlock(player, 60.0D);
 		long now = level.getGameTime();
-		int count = 3 + player.getRandom().nextInt(3);
-		METEOR_SHOWERS.add(new MeteorShower(player.getUUID(), center, now + 15 * 20L, count, now + 20L));
+		int count = 4 + player.getRandom().nextInt(4);
+		METEOR_SHOWERS.add(new MeteorShower(player.getUUID(), center, now + 15 * 20L, count, now + 20L, null));
 		drawCircle(level, center, 25.0D, ParticleTypes.FLAME);
 		level.playSound(null, center.x, center.y, center.z,
 				net.minecraft.sounds.SoundEvents.WITHER_SPAWN,
@@ -326,11 +327,11 @@ public final class WizardAbilities {
 			}
 
 			if (now >= shower.nextMeteorTick()) {
-				spawnMeteor(level, owner, shower.center());
+				Vec3 impactPos = spawnMeteor(level, owner, shower.center(), shower.lastImpactPosition());
 				int remaining = shower.remainingMeteors() - 1;
 				long next = now + Math.max(15L, (shower.expireTick() - now) / Math.max(1, remaining + 1));
 				METEOR_SHOWERS.remove(shower);
-				METEOR_SHOWERS.add(new MeteorShower(shower.ownerId(), shower.center(), shower.expireTick(), remaining, next));
+				METEOR_SHOWERS.add(new MeteorShower(shower.ownerId(), shower.center(), shower.expireTick(), remaining, next, impactPos));
 			} else if (now % 10L == 0L) {
 				drawCircle(level, shower.center(), 25.0D, ParticleTypes.SMOKE);
 			}
@@ -359,6 +360,7 @@ public final class WizardAbilities {
 			Vec3 pos = display.position().add(0.0D, -1.2D, 0.0D);
 			Vec3 next = pos.add(0.0D, -1.25D, 0.0D);
 			display.setPos(next.x, next.y, next.z);
+			display.setTransformation(new Transformation(new Vector3f(-0.5F, -0.5F, -0.5F), new Quaternionf().rotateXYZ(meteor.pitch(), meteor.yaw(), meteor.roll()), new Vector3f(2.0F, 2.0F, 2.0F), new Quaternionf()));
 			BlockPos below = BlockPos.containing(next.x, next.y - 1.35D, next.z);
 			boolean hit = next.y <= level.getMinY() + 2
 					|| level.getBlockState(below).isSolid()
@@ -372,7 +374,7 @@ public final class WizardAbilities {
 			}
 
 			METEORS.remove(meteor);
-			METEORS.add(new Meteor(meteor.ownerId(), meteor.entityId(), next, meteor.remainingTicks() - 1));
+			METEORS.add(new Meteor(meteor.ownerId(), meteor.entityId(), next, meteor.remainingTicks() - 1, meteor.pitch() + meteor.pitchStep(), meteor.yaw() + meteor.yawStep(), meteor.roll() + meteor.rollStep(), meteor.pitchStep(), meteor.yawStep(), meteor.rollStep()));
 		}
 	}
 
@@ -436,26 +438,46 @@ public final class WizardAbilities {
 		PROJECTILES.add(new WizardProjectile(player.getUUID(), kind, start, direction, speed, remainingTicks, minDamage, maxDamage));
 	}
 
-	private static void spawnMeteor(ServerLevel level, ServerPlayer owner, Vec3 center) {
-		double angle = owner.getRandom().nextDouble() * Math.PI * 2.0D;
-		double distance = Math.sqrt(owner.getRandom().nextDouble()) * 25.0D;
-		double x = center.x + Math.cos(angle) * distance;
-		double z = center.z + Math.sin(angle) * distance;
+	private static Vec3 spawnMeteor(ServerLevel level, ServerPlayer owner, Vec3 center, Vec3 lastImpactPosition) {
+		Vec3 impact = pickMeteorImpact(owner, center, lastImpactPosition);
+		double x = impact.x;
+		double z = impact.z;
 		double y = Math.min(level.getMaxY() - 4.0D, Math.max(center.y + 28.0D, level.getMaxY() - 12.0D));
 		Display.BlockDisplay display = EntityType.BLOCK_DISPLAY.create(level, EntitySpawnReason.TRIGGERED);
 		if (display == null) {
-			return;
+			return impact;
 		}
 		display.setBlockState(Blocks.MAGMA_BLOCK.defaultBlockState());
-		display.setTransformation(new Transformation(new Vector3f(-0.5F, -0.5F, -0.5F), new org.joml.Quaternionf(), new Vector3f(2.0F, 2.0F, 2.0F), new org.joml.Quaternionf()));
+		float pitch = owner.getRandom().nextFloat() * ((float) Math.PI * 2.0F);
+		float yaw = owner.getRandom().nextFloat() * ((float) Math.PI * 2.0F);
+		float roll = owner.getRandom().nextFloat() * ((float) Math.PI * 2.0F);
+		float pitchStep = 0.06F + owner.getRandom().nextFloat() * 0.07F;
+		float yawStep = 0.08F + owner.getRandom().nextFloat() * 0.1F;
+		float rollStep = 0.04F + owner.getRandom().nextFloat() * 0.06F;
+		display.setTransformation(new Transformation(new Vector3f(-0.5F, -0.5F, -0.5F), new Quaternionf().rotateXYZ(pitch, yaw, roll), new Vector3f(2.0F, 2.0F, 2.0F), new Quaternionf()));
 		display.setViewRange(128.0F);
 		display.setPos(x, y, z);
 		level.addFreshEntity(display);
-		METEORS.add(new Meteor(owner.getUUID(), display.getUUID(), new Vec3(x, y, z), 220));
+		METEORS.add(new Meteor(owner.getUUID(), display.getUUID(), new Vec3(x, y, z), 220, pitch, yaw, roll, pitchStep, yawStep, rollStep));
 		level.playSound(null, x, y, z,
 				net.minecraft.sounds.SoundEvents.FIRECHARGE_USE,
 				net.minecraft.sounds.SoundSource.PLAYERS,
 				1.2F, 0.45F);
+		return impact;
+	}
+
+	private static Vec3 pickMeteorImpact(ServerPlayer owner, Vec3 center, Vec3 lastImpactPosition) {
+		Vec3 selected = null;
+		for (int attempt = 0; attempt < 12; attempt++) {
+			double angle = owner.getRandom().nextDouble() * Math.PI * 2.0D;
+			double distance = Math.sqrt(owner.getRandom().nextDouble()) * 25.0D;
+			Vec3 candidate = new Vec3(center.x + Math.cos(angle) * distance, center.y, center.z + Math.sin(angle) * distance);
+			if (lastImpactPosition == null || candidate.distanceTo(lastImpactPosition) >= 7.0D) {
+				return candidate;
+			}
+			selected = candidate;
+		}
+		return selected != null ? selected : center;
 	}
 
 	private static Vec3 blockHitPosition(ServerLevel level, ServerPlayer owner, Vec3 start, Vec3 end) {
@@ -611,9 +633,9 @@ public final class WizardAbilities {
 		AABB area = new AABB(center.x - 7.0D, center.y - 7.0D, center.z - 7.0D, center.x + 7.0D, center.y + 7.0D, center.z + 7.0D);
 		for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, area, e -> e != owner && e.isAlive() && !isFriendly(owner, e))) {
 			if (entity.position().distanceTo(center) <= 7.0D) {
-				float damage = 10.0F;
+				float damage = 8.0F;
 				entity.hurtServer(level, owner.damageSources().onFire(), damage);
-				entity.igniteForSeconds(8);
+				entity.igniteForSeconds(4);
 			}
 		}
 		level.explode(owner, center.x, center.y, center.z, 7.0F, true, Level.ExplosionInteraction.TNT);
@@ -735,10 +757,10 @@ public final class WizardAbilities {
 	private record GravityWell(UUID ownerId, Vec3 center, long expireTick, long nextDamageTick) {
 	}
 
-	private record MeteorShower(UUID ownerId, Vec3 center, long expireTick, int remainingMeteors, long nextMeteorTick) {
+	private record MeteorShower(UUID ownerId, Vec3 center, long expireTick, int remainingMeteors, long nextMeteorTick, Vec3 lastImpactPosition) {
 	}
 
-	private record Meteor(UUID ownerId, UUID entityId, Vec3 lastPosition, int remainingTicks) {
+	private record Meteor(UUID ownerId, UUID entityId, Vec3 lastPosition, int remainingTicks, float pitch, float yaw, float roll, float pitchStep, float yawStep, float rollStep) {
 	}
 	private record TelekinesisState(UUID ownerId, UUID targetId, long expireTick) {}
 	private record WizardPassiveCooldown(UUID playerId, long nextAllowedTick) {}

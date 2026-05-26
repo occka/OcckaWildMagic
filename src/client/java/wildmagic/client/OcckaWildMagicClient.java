@@ -5,6 +5,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
@@ -13,6 +14,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import wildmagic.OcckaWildMagic;
+import wildmagic.WildMagicItems;
 import org.lwjgl.glfw.GLFW;
 import wildmagic.classdata.PlayerClassData;
 import wildmagic.client.gui.ClassMenuScreen;
@@ -32,12 +34,23 @@ public class OcckaWildMagicClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		registerNetworking();
+		registerItemColors();
 		registerKeybind();
 		HudElementRegistry.attachElementBefore(
 				VanillaHudElements.CHAT,
 				Identifier.fromNamespaceAndPath(OcckaWildMagic.MOD_ID, "class_exp"),
 				(graphics, tickCounter) -> renderClassExpHud(graphics)
 		);
+	}
+
+	private static void registerItemColors() {
+		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x5B2FCC : -1, WildMagicItems.MANA_POTION);
+		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x2A5FFF : -1, WildMagicItems.MANA_POTION_2);
+		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xFF4500 : -1, WildMagicItems.DRAGON_POTION_FIRE);
+		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xAAEEFF : -1, WildMagicItems.DRAGON_POTION_ICE);
+		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x4444FF : -1, WildMagicItems.DRAGON_POTION_LIGHTNING);
+		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0x1A7A1A : -1, WildMagicItems.DRAGON_POTION_POISON);
+		ColorProviderRegistry.ITEM.register((stack, tintIndex) -> tintIndex == 0 ? 0xCCCCCC : -1, WildMagicItems.DRAGON_POTION_THUNDER);
 	}
 
 	private static void registerNetworking() {
