@@ -1,0 +1,14 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:blaze_rod",
+        "minecraft:blaze_rod",
+        "minecraft:blaze_powder",
+        "minecraft:blaze_powder",
+        "minecraft:wither_skeleton_skull"
+    ],
+    "result": {
+        "id": "occkawildmagic:staff_fire",
+        "count": 1
+    }
+}

@@ -13,6 +13,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import wildmagic.OcckaWildMagic;
+import wildmagic.WildMagicItems;
 import org.lwjgl.glfw.GLFW;
 import wildmagic.classdata.PlayerClassData;
 import wildmagic.client.gui.ClassMenuScreen;

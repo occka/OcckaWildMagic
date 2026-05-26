@@ -1,0 +1,11 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:lightning_rod",
+        "minecraft:ink_sac"
+    ],
+    "result": {
+        "id": "occkawildmagic:wand_copper",
+        "count": 1
+    }
+}

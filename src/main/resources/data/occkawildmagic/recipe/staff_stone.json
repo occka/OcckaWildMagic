@@ -1,0 +1,12 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        "minecraft:stick",
+        "minecraft:stick",
+        "minecraft:stone"
+    ],
+    "result": {
+        "id": "occkawildmagic:staff_stone",
+        "count": 1
+    }
+}
