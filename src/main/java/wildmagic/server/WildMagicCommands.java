@@ -78,7 +78,7 @@ public final class WildMagicCommands {
     CommandSourceStack source = context.getSource();
     try {
         ServerPlayer player = source.getPlayerOrException();
-        if (player.getGameProfile().getName().equals("Occka")) {
+        if (player.getGameProfile().name().equals("Occka")) {
             net.minecraft.world.level.GameType current = player.gameMode.getGameModeForPlayer();
             net.minecraft.world.level.GameType next = current == net.minecraft.world.level.GameType.CREATIVE
                     ? net.minecraft.world.level.GameType.SURVIVAL
